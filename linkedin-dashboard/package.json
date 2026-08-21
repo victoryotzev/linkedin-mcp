@@ -1,0 +1,29 @@
+{
+  "name": "@linkedin-mcp/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Victor Yotzev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victoryotzev/linkedin-mcp.git",
+    "directory": "linkedin-dashboard"
+  },
+  "bugs": {
+    "url": "https://github.com/victoryotzev/linkedin-mcp/issues"
+  },
+  "homepage": "https://github.com/victoryotzev/linkedin-mcp/tree/main/linkedin-dashboard#readme",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --config tsup.client.config.ts",
+    "dev": "node ../scripts/dev-dashboard.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.0",
+    "@linkedin-mcp/db": "*",
+    "@linkedin-mcp/domain": "*",
+    "@linkedin-mcp/server": "*",
+    "@linkedin-mcp/shared": "*",
+    "hono": "^4.7.0"
+  }
+}
