@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ten read-only evaluation questions over the synthetic corpus built by
+  scripts/seed-eval.ts. Each answer is stable, verifiable by string comparison,
+  and requires the model to actually query the server rather than guess: the
+  numbers and ids exist nowhere else.
+-->
+<evaluation>
+  <qa_pair>
+    <question>Using the linkedin_mcp server, how many claims are in state "verified"?</question>
+    <answer>6</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the state of claim clm_eval09?</question>
+    <answer>ambiguous</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Conflict cfl_eval01 is of what type, and which two claim ids are its members? Answer as "type; idA and idB" with the ids in ascending order.</question>
+    <answer>contradiction; clm_eval04 and clm_eval09</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>For draft drf_eval01, how many of its sentences are backed by verified claims, out of how many total? Answer as "supported/total".</question>
+    <answer>4/5</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Draft drf_eval01 fails validation. Besides unsupported_claims, which other check fails?</question>
+    <answer>fabricated_metrics</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the status of the capability linkedin.publish_post, and what single blocker does it report? Answer as "status; blocker".</question>
+    <answer>unavailable; no_linkedin_app</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which claim id is in state "rejected", and what reason was recorded? Answer as "id; reason".</question>
+    <answer>clm_eval11; local clone, authorship claim not permitted</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many artifacts were imported from the source labelled fixture-repo-alpha?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the most recent recorded impressions value for subject urn:li:share:FIX123?</question>
+    <answer>410</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Claim clm_eval11 cites evidence from a source whose trust level forbids one kind of statement. What is that trust level?</question>
+    <answer>local_clone_reference</answer>
+  </qa_pair>
+</evaluation>
