@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@linkedin-mcp/shared": ["packages/shared/src/index.ts"],
+      "@linkedin-mcp/db": ["packages/db/src/index.ts"],
+      "@linkedin-mcp/domain": ["packages/domain/src/index.ts"],
+      "@linkedin-mcp/importers": ["packages/importers/src/index.ts"],
+      "@linkedin-mcp/linkedin": ["packages/linkedin/src/index.ts"],
+      "@linkedin-mcp/server/dashboard": ["linkedin-mcp-server/src/dashboardBridge.ts"],
+      "@linkedin-mcp/importers/package.json": ["packages/importers/package.json"]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "linkedin-dashboard/**/*.ts",
+    "linkedin-mcp-server/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ],
+  // The browser client and the Playwright suite have their own project
+  // (tsconfig.client.json) because both need the DOM lib this one deliberately
+  // lacks — page.evaluate callbacks run in the page. Excluded here so neither
+  // is compiled under the wrong lib.
+  "exclude": ["linkedin-dashboard/src/client/**", "tests/visual/**"]
+}

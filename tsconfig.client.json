@@ -1,0 +1,34 @@
+{
+  // The browser half of the dashboard. It needs the DOM lib, which the main
+  // project deliberately does not have (`lib: ["ES2023"]`, `types: ["node"]`),
+  // so it cannot live in tsconfig.typecheck.json. `npm run typecheck` runs BOTH
+  // projects.
+  //
+  // Node types stay available because the .test.tsx files below run under
+  // Vitest and need them. Client code accidentally importing a node builtin is
+  // caught by the bundler instead: tsup runs with platform:'browser', which
+  // fails to resolve `node:*`.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx/dom",
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@linkedin-mcp/shared": ["packages/shared/src/index.ts"],
+      "@linkedin-mcp/db": ["packages/db/src/index.ts"],
+      "@linkedin-mcp/domain": ["packages/domain/src/index.ts"],
+      "@linkedin-mcp/importers": ["packages/importers/src/index.ts"],
+      "@linkedin-mcp/linkedin": ["packages/linkedin/src/index.ts"],
+      "@linkedin-mcp/importers/package.json": ["packages/importers/package.json"]
+    }
+  },
+  "include": [
+    "linkedin-dashboard/src/client/**/*.ts",
+    "linkedin-dashboard/src/client/**/*.tsx",
+    "tests/**/*.test.tsx",
+    "tests/visual/**/*.ts",
+    "playwright.config.ts"
+  ]
+}

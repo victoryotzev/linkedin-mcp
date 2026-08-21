@@ -1,0 +1,60 @@
+{
+  "name": "linkedin-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Victor Yotzev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victoryotzev/linkedin-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/victoryotzev/linkedin-mcp/issues"
+  },
+  "homepage": "https://github.com/victoryotzev/linkedin-mcp#readme",
+  "description": "Local-first MCP server + review dashboard for LinkedIn profile and personal-brand management, grounded in a verified-evidence ledger",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "linkedin-dashboard",
+    "linkedin-mcp-server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -p tsconfig.typecheck.json && tsc -p tsconfig.client.json",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "setup:mcp": "powershell -NoProfile -ExecutionPolicy Bypass -File ./setup-mcp.ps1",
+    "control": "tsx scripts/control.ts",
+    "notices": "tsx scripts/gen-third-party-notices.ts",
+    "mcp:build": "npm run build -w @linkedin-mcp/server",
+    "mcp:start": "node linkedin-mcp-server/dist/index.js",
+    "mcp:dev": "npm run dev -w @linkedin-mcp/server",
+    "evidence:add": "tsx scripts/onboard-import.ts",
+    "dashboard": "npm run dev -w @linkedin-mcp/dashboard",
+    "inspect:list": "npx @modelcontextprotocol/inspector --cli node linkedin-mcp-server/dist/index.js --method tools/list",
+    "test:visual": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@biomejs/biome": "2.5.9",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "3.2.7",
+    "axe-core": "^4.13.0",
+    "happy-dom": "^20.11.2",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
+}

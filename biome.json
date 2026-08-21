@@ -1,0 +1,62 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.9/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/test-results",
+      "!package-lock.json",
+      "!**/*.css"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "overrides": [
+    {
+      "includes": ["linkedin-dashboard/src/client/components/CommandPalette.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noNoninteractiveElementToInteractiveRole": "off",
+            "useKeyWithClickEvents": "off",
+            "useFocusableInteractive": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "linkedin-dashboard/src/client/components/Facts.tsx",
+        "linkedin-dashboard/src/client/screens/Content.tsx",
+        "linkedin-dashboard/src/client/screens/Evidence.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ]
+}
