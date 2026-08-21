@@ -1,0 +1,367 @@
+import { spawn } from 'node:child_process';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { withWriteTx, type Row, type SqliteDriver } from '@linkedin-mcp/db';
+import { DomainError } from '@linkedin-mcp/shared';
+
+// Windows DPAPI (CurrentUser) is the only trust anchor here, and it is worth
+// being exact about what that buys. The OS wraps our master key with material
+// derived from this Windows account, so the file on disk is inert on another
+// machine, under another local account, and to anyone who images the drive.
+// What it does NOT do is protect the key from *this* user: any process running
+// as you can call Unprotect on the same file and read the key straight back.
+// There is no passphrase and no hardware binding. It raises the cost of
+// offline and cross-account theft; it is not a defence against malware
+// running as you.
+//
+// A passphrase was considered and rejected: the dashboard is a background
+// local service, so the passphrase would end up cached in the same process —
+// this security model with extra steps and a worse failure mode.
+
+export interface SecretStore {
+  put(name: string, value: string): Promise<void>;
+  get(name: string): Promise<string | null>;
+  has(name: string): boolean;
+  remove(name: string): Promise<void>;
+  listNames(): string[];
+}
+
+// LinkedIn forces the read and write lanes into separate developer apps
+// (binding an app to the Data Portability company page permanently blocks the
+// share products), so one member holds two client ids and two tokens.
+export const SECRET_NAMES = {
+  ACCESS_TOKEN_READ: 'linkedin.access_token.read',
+  ACCESS_TOKEN_WRITE: 'linkedin.access_token.write',
+  CLIENT_ID_READ: 'linkedin.client_id.read',
+  CLIENT_ID_WRITE: 'linkedin.client_id.write',
+} as const;
+
+// Writes are allowlisted the same way settings are: this table is a credential
+// vault, not a general key-value store that other code can grow into.
+const STORABLE_NAMES: readonly string[] = Object.values(SECRET_NAMES);
+
+const MASTER_KEY_FILE = 'master.key.dpapi';
+
+// The unwrapped envelope is [version:1][key_id:8][aes-256 key:32]. The key id
+// is random and travels *inside* the wrapped blob rather than being derived
+// from the key, so the plaintext key_id column reveals nothing about the key.
+const ENVELOPE_VERSION = 1;
+const KEY_ID_BYTES = 8;
+const AES_KEY_BYTES = 32;
+const ENVELOPE_BYTES = 1 + KEY_ID_BYTES + AES_KEY_BYTES;
+const IV_BYTES = 12;
+
+interface MasterKey {
+  keyId: string;
+  key: Buffer;
+}
+
+type DpapiOp = 'Protect' | 'Unprotect';
+
+const DPAPI_TIMEOUT_MS = 15_000;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+// Absolute path: a `powershell.exe` planted earlier on PATH would otherwise be
+// handed the master key in plaintext on stdin.
+function powershellPath(): string {
+  const systemRoot = process.env['SystemRoot'];
+  return systemRoot
+    ? join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    : 'powershell.exe';
+}
+
+// Windows PowerShell 5.1 specifically: ProtectedData lives in the .NET
+// Framework System.Security assembly, which Add-Type loads on demand. pwsh 7
+// would need a NuGet package we are not going to ship.
+function dpapiScript(op: DpapiOp): string {
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    'Add-Type -AssemblyName System.Security',
+    '$bytes = [Convert]::FromBase64String([Console]::In.ReadToEnd().Trim())',
+    `$out = [System.Security.Cryptography.ProtectedData]::${op}($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)`,
+    '[Console]::Out.Write([Convert]::ToBase64String($out))',
+  ].join('\n');
+}
+
+async function dpapi(op: DpapiOp, inputBase64: string, keyPath: string): Promise<Buffer> {
+  // -EncodedCommand (UTF-16LE base64) instead of -Command: it removes the
+  // quoting minefield between Node's Windows argv escaping and PowerShell's
+  // parser. Only the *script* rides in argv — key material goes over stdin,
+  // because argv is readable by every process on the machine.
+  const encoded = Buffer.from(dpapiScript(op), 'utf16le').toString('base64');
+  const child = spawn(
+    powershellPath(),
+    ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+    { windowsHide: true },
+  );
+  const { stdin, stdout, stderr } = child;
+  if (stdin === null || stdout === null || stderr === null) {
+    child.kill();
+    throw new DomainError(
+      'INTERNAL',
+      'powershell.exe started without stdio pipes, so the DPAPI exchange cannot run',
+      { blockers: ['dpapi_no_pipes'] },
+    );
+  }
+
+  let timedOut = false;
+  const result = await new Promise<{ code: number | null; out: string }>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, DPAPI_TIMEOUT_MS);
+    stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    // Drained and discarded. Draining is mandatory (a full stderr pipe stalls
+    // the child); discarding is deliberate, because a .NET exception message
+    // is the one channel that could echo our own input back into an error
+    // string we later surface. The exit code is the diagnostic.
+    stderr.resume();
+    stdin.on('error', () => {
+      // Child died before reading stdin; 'close' carries the real cause.
+    });
+    child.once('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code, out: Buffer.concat(chunks).toString('ascii') });
+    });
+    stdin.end(inputBase64);
+  }).catch((err: unknown) => {
+    const spawnCode = (err as NodeJS.ErrnoException).code;
+    throw new DomainError(
+      'INTERNAL',
+      spawnCode === 'ENOENT'
+        ? `Windows PowerShell was not found at ${powershellPath()}. DPAPI is how this build protects credentials, so secret storage is unavailable on this host; the rest of the product works without it.`
+        : `powershell.exe could not be started for the DPAPI ${op} call`,
+      { blockers: ['powershell_unavailable'] },
+    );
+  });
+
+  if (timedOut) {
+    throw new DomainError(
+      'INTERNAL',
+      `the DPAPI ${op} call did not finish within ${DPAPI_TIMEOUT_MS}ms and was killed; retry, and if it persists check whether an endpoint agent is blocking powershell.exe`,
+      { blockers: ['dpapi_timeout'], retryable: true },
+    );
+  }
+
+  const out = result.out.trim();
+  if (result.code !== 0 || !BASE64_RE.test(out)) {
+    if (op === 'Unprotect') {
+      throw new DomainError(
+        'INTEGRITY_ERROR',
+        `Windows DPAPI refused to unwrap ${keyPath} (powershell exit ${result.code}). DPAPI material is bound to this Windows user and this machine, so a secrets folder copied from another PC, restored from a backup, or written under a different account can never be unwrapped here. Delete that folder and re-paste your LinkedIn token in the dashboard (Capabilities area).`,
+        { blockers: ['dpapi_unwrap_failed'] },
+      );
+    }
+    throw new DomainError(
+      'INTERNAL',
+      `Windows DPAPI refused to wrap the master key (powershell exit ${result.code}); no secret was stored`,
+      { blockers: ['dpapi_protect_failed'] },
+    );
+  }
+  return Buffer.from(out, 'base64');
+}
+
+function parseEnvelope(bytes: Buffer, keyPath: string): MasterKey {
+  if (bytes.length !== ENVELOPE_BYTES || bytes[0] !== ENVELOPE_VERSION) {
+    throw new DomainError(
+      'INTEGRITY_ERROR',
+      `${keyPath} unwrapped to something that is not a v${ENVELOPE_VERSION} master key envelope, so the file is corrupt. Delete the secrets folder and re-paste your LinkedIn token in the dashboard (Capabilities area).`,
+      { blockers: ['master_key_corrupt'] },
+    );
+  }
+  return {
+    keyId: `mk_${bytes.subarray(1, 1 + KEY_ID_BYTES).toString('hex')}`,
+    key: bytes.subarray(1 + KEY_ID_BYTES),
+  };
+}
+
+async function resolveMasterKey(keyPath: string): Promise<MasterKey> {
+  if (existsSync(keyPath)) {
+    const wrapped = readFileSync(keyPath, 'utf8').trim();
+    return parseEnvelope(await dpapi('Unprotect', wrapped, keyPath), keyPath);
+  }
+  mkdirSync(dirname(keyPath), { recursive: true });
+  const envelope = Buffer.concat([
+    Buffer.of(ENVELOPE_VERSION),
+    randomBytes(KEY_ID_BYTES),
+    randomBytes(AES_KEY_BYTES),
+  ]);
+  // The file holds base64, not the raw DPAPI blob: it is what crosses stdin on
+  // the way back in, and a text file survives being opened by a curious editor.
+  const wrapped = (await dpapi('Protect', envelope.toString('base64'), keyPath)).toString('base64');
+  try {
+    // 'wx': if another process created the key during our ~200ms in
+    // PowerShell, its key is the authoritative one — clobbering it would
+    // strand every row that process already encrypted.
+    writeFileSync(keyPath, wrapped, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    const winner = readFileSync(keyPath, 'utf8').trim();
+    return parseEnvelope(await dpapi('Unprotect', winner, keyPath), keyPath);
+  }
+  return parseEnvelope(envelope, keyPath);
+}
+
+// The name and key id are authenticated but not encrypted, so a ciphertext
+// lifted out of the read-lane row and pasted into the write-lane row fails to
+// decrypt instead of silently swapping tokens between two LinkedIn apps.
+function additionalData(name: string, keyId: string): Buffer {
+  return Buffer.from(`${name}\0${keyId}`, 'utf8');
+}
+
+function blobColumn(row: Row, column: string, name: string): Buffer {
+  const value = row[column];
+  if (!(value instanceof Uint8Array)) {
+    throw new DomainError(
+      'INTEGRITY_ERROR',
+      `secret '${name}' has a non-binary ${column} column, so the row was written by something other than this store. Delete it and re-paste the value in the dashboard (Capabilities area).`,
+      { blockers: ['secret_row_corrupt'] },
+    );
+  }
+  return Buffer.from(value);
+}
+
+export function createSecretStore(db: SqliteDriver, home: string): SecretStore {
+  const keyPath = join(home, 'secrets', MASTER_KEY_FILE);
+
+  // One PowerShell round trip per process rather than per operation: spawning
+  // the interpreter costs ~200ms, and the dashboard pastes a client id and a
+  // token together. `pending` collapses callers that arrive during that spawn.
+  let cached: MasterKey | null = null;
+  let pending: Promise<MasterKey> | null = null;
+
+  async function masterKey(): Promise<MasterKey> {
+    if (cached !== null) return cached;
+    pending ??= resolveMasterKey(keyPath);
+    try {
+      cached = await pending;
+      return cached;
+    } finally {
+      // Cleared on failure too, so a transient PowerShell problem does not
+      // poison the store for the life of the process.
+      pending = null;
+    }
+  }
+
+  return {
+    async put(name: string, value: string): Promise<void> {
+      if (!STORABLE_NAMES.includes(name)) {
+        throw new DomainError(
+          'INVALID_INPUT',
+          `'${name}' is not a storable secret; this store holds only ${STORABLE_NAMES.join(', ')}`,
+          { blockers: ['unknown_secret_name'] },
+        );
+      }
+      // Pasted tokens routinely carry a trailing newline, which becomes an
+      // invalid Authorization header hours later and looks like a revoked
+      // credential.
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        throw new DomainError(
+          'INVALID_INPUT',
+          `refusing to store an empty value for '${name}'; paste the value again in the dashboard (Capabilities area)`,
+          { blockers: ['empty_secret'] },
+        );
+      }
+
+      const { key, keyId } = await masterKey();
+      const iv = randomBytes(IV_BYTES);
+      const cipher = createCipheriv('aes-256-gcm', key, iv);
+      cipher.setAAD(additionalData(name, keyId));
+      const ciphertext = Buffer.concat([cipher.update(trimmed, 'utf8'), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      const now = new Date().toISOString();
+
+      withWriteTx(db, () => {
+        db.run(
+          `INSERT INTO secrets (name, ciphertext, iv, auth_tag, key_id, created_at, rotated_at)
+           VALUES (?, ?, ?, ?, ?, ?, NULL)
+           ON CONFLICT (name) DO UPDATE SET
+             ciphertext = excluded.ciphertext,
+             iv = excluded.iv,
+             auth_tag = excluded.auth_tag,
+             key_id = excluded.key_id,
+             rotated_at = ?`,
+          name,
+          ciphertext,
+          iv,
+          authTag,
+          keyId,
+          now,
+          now,
+        );
+      });
+    },
+
+    async get(name: string): Promise<string | null> {
+      const row = db.get(
+        'SELECT ciphertext, iv, auth_tag, key_id FROM secrets WHERE name = ?',
+        name,
+      );
+      if (row === undefined) return null;
+
+      // Checked before touching DPAPI so an unknown name never costs a spawn,
+      // and so a crypto-erased home (purgeEverything deletes secrets/) reports
+      // the real cause instead of minting a fresh key that decrypts nothing.
+      if (!existsSync(keyPath)) {
+        throw new DomainError(
+          'INTEGRITY_ERROR',
+          `secret '${name}' is stored but ${keyPath} is gone, so its ciphertext is permanently unrecoverable — that is exactly what a full local purge does. Re-paste the value in the dashboard (Capabilities area).`,
+          { blockers: ['master_key_missing'] },
+        );
+      }
+
+      const { key, keyId } = await masterKey();
+      const rowKeyId = String(row['key_id']);
+      if (rowKeyId !== keyId) {
+        throw new DomainError(
+          'INTEGRITY_ERROR',
+          `secret '${name}' was encrypted under master key ${rowKeyId} but this home now holds ${keyId}. DPAPI material is bound to this Windows user and machine, so a database and a secrets folder from different origins cannot be mixed. Re-paste the value in the dashboard (Capabilities area).`,
+          { blockers: ['master_key_mismatch'] },
+        );
+      }
+
+      const decipher = createDecipheriv('aes-256-gcm', key, blobColumn(row, 'iv', name));
+      decipher.setAAD(additionalData(name, rowKeyId));
+      decipher.setAuthTag(blobColumn(row, 'auth_tag', name));
+      // Read before the try, with its siblings. Inside it, a text column in a
+      // restored database was reported as a failed authentication — the same
+      // remedy, but the wrong cause, and the member had no way to learn the row
+      // did not come from this store.
+      const ciphertext = blobColumn(row, 'ciphertext', name);
+      try {
+        const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+        return plaintext.toString('utf8');
+      } catch {
+        // The underlying error is swallowed rather than wrapped: it carries no
+        // detail the member can act on, and it is the one place a crypto
+        // library could echo input back into a message we surface.
+        throw new DomainError(
+          'INTEGRITY_ERROR',
+          `secret '${name}' failed authenticated decryption: the row was altered after it was written, or its ciphertext was moved from another name. Re-paste the value in the dashboard (Capabilities area).`,
+          { blockers: ['secret_auth_failed'] },
+        );
+      }
+    },
+
+    has(name: string): boolean {
+      return db.get('SELECT 1 AS present FROM secrets WHERE name = ?', name) !== undefined;
+    },
+
+    async remove(name: string): Promise<void> {
+      withWriteTx(db, () => {
+        db.run('DELETE FROM secrets WHERE name = ?', name);
+      });
+    },
+
+    listNames(): string[] {
+      return db.all('SELECT name FROM secrets ORDER BY name').map((row) => String(row['name']));
+    },
+  };
+}
