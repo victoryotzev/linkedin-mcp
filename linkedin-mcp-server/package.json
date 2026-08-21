@@ -1,0 +1,44 @@
+{
+  "name": "@linkedin-mcp/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Victor Yotzev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victoryotzev/linkedin-mcp.git",
+    "directory": "linkedin-mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/victoryotzev/linkedin-mcp/issues"
+  },
+  "homepage": "https://github.com/victoryotzev/linkedin-mcp/tree/main/linkedin-mcp-server#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "bin": {
+    "linkedin-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "exports": {
+    "./dashboard": "./src/dashboardBridge.ts"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@linkedin-mcp/db": "*",
+    "@linkedin-mcp/domain": "*",
+    "@linkedin-mcp/shared": "*",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0"
+  }
+}
