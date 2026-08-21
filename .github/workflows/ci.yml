@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: nothing here writes to the repository.
+permissions:
+  contents: read
+
+# A newer push supersedes an in-flight run on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Windows only, on purpose. Evidence import accepts drive-letter paths and
+    # the credential vault needs Windows PowerShell, so a Linux lane would
+    # exercise a configuration nobody is asked to run. See docs/compatibility.md.
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Build precedes test deliberately: the protocol-cleanliness suite drives
+      # the compiled stdio server and needs dist/ to exist.
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # `npm run inspect:list` is intentionally NOT run here. It fetches and
+      # executes @modelcontextprotocol/inspector at job time, which is both an
+      # availability and a supply-chain surface. The tool catalogue is already
+      # asserted name-for-name over a real stdio session in
+      # tests/integration/protocol-clean.test.ts.
+
+  # Blocking. The formatting commit has landed and every error-level finding is
+  # either fixed or suppressed with a stated reason, so a new error here is a new
+  # problem. Warnings and infos remain non-blocking by Biome's own severity.
+  style:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+      - run: npx biome ci . --diagnostic-level=error
+
+  clean-room:
+    # A fresh runner with no prior data home is the closest thing this project
+    # has to a clean machine, so first-run behaviour is proved here.
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: First run against an empty data home
+        shell: pwsh
+        env:
+          LINKEDIN_MCP_HOME: ${{ runner.temp }}\linkedin-mcp-cleanroom
+        run: |
+          if (Test-Path $env:LINKEDIN_MCP_HOME) { Remove-Item -Recurse -Force $env:LINKEDIN_MCP_HOME }
+
+          # The server speaks JSON-RPC on stdin/stdout and exits on EOF, so a
+          # single initialize request is a complete session.
+          $request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+          $out = $request | node linkedin-mcp-server/dist/index.js
+          if ($LASTEXITCODE -ne 0) { throw "server exited $LASTEXITCODE" }
+          if (-not $out) { throw 'server produced no response' }
+          Write-Host $out
+
+          $dbPath = Join-Path $env:LINKEDIN_MCP_HOME 'data\linkedin.sqlite3'
+          if (-not (Test-Path $dbPath)) { throw "no database created at $dbPath" }
+          Write-Host "created $dbPath"

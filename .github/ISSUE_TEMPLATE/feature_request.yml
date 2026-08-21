@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest something this should do.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read [docs/known-limitations.md](../blob/main/docs/known-limitations.md)
+        first. Several things are missing on purpose — no scheduler, no
+        scraping, no bundled LLM, no automated engagement — and requests to add
+        them will be declined.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that you cannot do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Safety check
+      description: This project keeps a few properties deliberately. Confirm your idea does not need them removed.
+      options:
+        - label: It does not require weakening or removing a confirmation contract.
+          required: true
+        - label: It does not require scraping, browser automation, or cookie reuse.
+          required: true
+        - label: It does not require a background scheduler or automatic refresh.
+          required: true

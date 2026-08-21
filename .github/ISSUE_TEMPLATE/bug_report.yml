@@ -1,0 +1,90 @@
+name: Bug report
+description: Something behaves differently from what the documentation says.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste real data.** No access tokens, no database files, no
+        artifact contents, no screenshots of your own profile. A redacted
+        reproduction is always enough. If you believe this is a security
+        vulnerability, stop and follow [SECURITY.md](../blob/main/SECURITY.md)
+        instead — do not file it here.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "e.g. Windows 11 Pro 24H2"
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`.
+      placeholder: "v24.x.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      options:
+        - MCP server (through an AI client)
+        - Dashboard
+        - Control CLI (npm run control)
+        - Setup assistant (setup-mcp.ps1)
+        - Tests / build
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client, if relevant
+      placeholder: "e.g. Claude Desktop, Cursor, VS Code Copilot"
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name, if relevant
+      placeholder: "e.g. linkedin_draft_validate"
+
+  - type: dropdown
+    id: home
+    attributes:
+      label: Data home
+      description: The shape, not the path. Never paste the path itself.
+      options:
+        - Default (%LOCALAPPDATA%\linkedin-mcp)
+        - Custom absolute path via LINKEDIN_MCP_HOME
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error output, redacted
+      description: Error code and message. Remove anything identifying before pasting.
+      render: text
