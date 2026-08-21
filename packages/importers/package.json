@@ -1,0 +1,30 @@
+{
+  "name": "@linkedin-mcp/importers",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Victor Yotzev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victoryotzev/linkedin-mcp.git",
+    "directory": "packages/importers"
+  },
+  "bugs": {
+    "url": "https://github.com/victoryotzev/linkedin-mcp/issues"
+  },
+  "homepage": "https://github.com/victoryotzev/linkedin-mcp/tree/main/packages/importers#readme",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@linkedin-mcp/shared": "*",
+    "pdfjs-dist": "^6.2.108",
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/yauzl": "^2.10.3"
+  }
+}
