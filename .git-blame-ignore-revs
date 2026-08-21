@@ -1,0 +1,16 @@
+# Revisions to skip when running `git blame`.
+#
+# Enable locally, once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub reads this file automatically.
+#
+# Only whole-tree formatting commits belong here. A commit that changes
+# behaviour must never be listed, however noisy its diff.
+
+# Add the SHA of the `style: apply Biome formatting` commit here, on its own
+# line, immediately after making it. That commit must contain formatting and
+# nothing else.
+
+# style: apply Biome formatting
+857c533fc193f608fa8c1d69fd76d6b43b8d44af

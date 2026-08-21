@@ -1,0 +1,24 @@
+LinkedIn Evidence MCP
+Copyright (c) 2026 Victor Yotzev
+
+Licensed under the MIT License. See LICENSE for the full text.
+
+
+Trademark and affiliation
+-------------------------
+
+This project is an independent, community-built tool. It is not affiliated
+with, endorsed by, sponsored by, or in any way officially connected to
+LinkedIn Corporation or Microsoft Corporation.
+
+"LinkedIn" is a trademark of LinkedIn Corporation. It appears in this project's
+name, documentation, and identifiers only to describe the service the software
+interoperates with, and never to suggest that LinkedIn produced or approved it.
+
+
+Third-party components
+----------------------
+
+This project depends on third-party open-source packages. Their licenses and
+copyright notices are listed in THIRD-PARTY-NOTICES.md, which is generated from
+package-lock.json by `npm run notices`.

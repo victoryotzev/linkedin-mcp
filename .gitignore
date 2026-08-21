@@ -1,0 +1,31 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+test-results/
+playwright-report/
+
+.claude/settings.local.json
+.claude/*.local.*
+.baseline.json
+
+# Anything shaped like a member's own data, so a stray file in the working tree
+# cannot become a commit. None of these belong in this repository at any point:
+# a data home lives outside it, and the fixtures are synthetic and checked in
+# deliberately. Listed by shape rather than by path because the mistake this
+# guards against is a file appearing somewhere nobody expected.
+secrets/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.zip
+*.pdf
+*.docx
+*.pem
+*.key
+*.pfx
