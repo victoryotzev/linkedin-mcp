@@ -1,0 +1,24 @@
+{
+  "name": "@linkedin-mcp/db",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Victor Yotzev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victoryotzev/linkedin-mcp.git",
+    "directory": "packages/db"
+  },
+  "bugs": {
+    "url": "https://github.com/victoryotzev/linkedin-mcp/issues"
+  },
+  "homepage": "https://github.com/victoryotzev/linkedin-mcp/tree/main/packages/db#readme",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@linkedin-mcp/shared": "*"
+  }
+}
