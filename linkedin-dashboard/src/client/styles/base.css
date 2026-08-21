@@ -1,0 +1,231 @@
+/* Reset, typography, focus, and the global accessibility affordances. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* rem-based sizing throughout, so browser text-size settings and 200% zoom
+     (WCAG 1.4.4) scale the whole interface rather than breaking it. */
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* One scrollbar, and it belongs to the region that owns the content.
+ *
+ * `.app` is a fixed frame that clips, but the document still reported a
+ * scrollHeight taller than the viewport and browsers painted a page scrollbar
+ * beside the sheet's own — two bars, one of which scrolled nothing. Taking the
+ * document out of the scrolling business entirely is the only reliable fix;
+ * below 768px the frame is given up and the document scrolls again, so this is
+ * scoped to where the frame actually holds. */
+@media (min-width: 768px) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: var(--text-lg); }
+h2 { font-size: var(--text-md); }
+h3 { font-size: var(--text-base); }
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* Counts, hashes and timestamps line up column-wise and stop jittering as they
+   change. */
+.u-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.u-mono {
+  font-family: var(--font-mono);
+  /* Machine facts are long and unbreakable — `capability.token_configured`,
+     a ULID, a sha256. Inside a flex row a token like that cannot shrink below
+     its own width, so at large text sizes it pushes the page wider than the
+     viewport. Found at 200% text size in a real browser (WCAG 1.4.4). */
+  overflow-wrap: anywhere;
+}
+
+.u-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.u-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- scrollbars ---------------------------------------------------------- */
+
+/* A default scrollbar is a white-and-grey strip from no design system at all,
+   and in a dark theme it is the brightest thing on the screen. These are
+   interior edges of the sheet, so they are drawn from the palette: a track that
+   is simply the ground, and a thumb at `--border-strong`, which the contrast
+   matrix already holds at 3:1 against every surface it can land on.
+
+   `scrollbar-color` is the standard property and does the whole job in Firefox
+   and current Chromium. The WebKit block below is for Safari, which still wants
+   the pseudo-elements; both describe the same object. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-chip);
+  background-color: var(--border-strong);
+  /* Inset from the edge by a transparent border, so the thumb reads as a mark
+     on the page rather than a bar bolted to its side. */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-subtle);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* --- focus (WCAG 2.4.7, 2.4.11) ----------------------------------------- */
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+  /* Sticky headers and toolbars must never cover the focused element. */
+  scroll-margin: var(--space-8);
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* --- motion -------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- forced colors ------------------------------------------------------- */
+/* Everything that relied on a background or a colour to be legible gets an
+   explicit border or a system colour instead. Status still carries a glyph and
+   a word, so meaning survives here without any colour at all. */
+
+@media (forced-colors: active) {
+  .card,
+  .panel,
+  .dialog,
+  .drawer,
+  .chip,
+  .field__control,
+  .btn {
+    border: 1px solid CanvasText;
+  }
+
+  .btn--primary,
+  .btn--danger {
+    border: 1px solid ButtonText;
+    forced-color-adjust: none;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
+
+  .rail__link[aria-current='page'] {
+    background: Highlight;
+    color: HighlightText;
+  }
+}

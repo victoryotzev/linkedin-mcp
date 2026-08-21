@@ -1,0 +1,531 @@
+/*
+ * The app shell.
+ *
+ * Desktop-primary by evidence, not by preference: the server binds 127.0.0.1
+ * and the guard allowlists only 127.0.0.1/localhost, so a phone cannot reach
+ * this dashboard at all. The narrow cases that DO occur are split-screen
+ * windows and zoom — and WCAG 1.4.10 requires reflow at a 320px-equivalent
+ * viewport, which is what 1280px at 400% zoom produces. That standard sets the
+ * floor here, not a device.
+ *
+ * Breakpoints are therefore chosen where the content stops fitting.
+ */
+
+/* The sheet, not the page.
+ *
+ * A proof sheet is a fixed surface you work across; a dashboard that grows
+ * downward forever is the thing this replaced. The frame is exactly one
+ * viewport tall and never scrolls: the destinations, the slug line and the
+ * decision controls hold still, and only the work itself moves, inside its own
+ * region. `dvh` rather than `vh` so a mobile browser's collapsing toolbar does
+ * not cut the last row off.
+ *
+ * Below 767px this is abandoned deliberately — see the bottom of this file.
+ * A fixed frame divided into scroll regions needs room to be worth having, and
+ * at the reflow floor the honest answer is one column in document flow.
+ */
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* --- rail ---------------------------------------------------------------- */
+
+/* The rail recedes. It is how you leave, not what you are doing, and it should
+   never compete with the sheet for attention — so it sits on the page ground
+   rather than on a raised surface, and its resting text is muted. */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  /* Its own scroll if it ever outgrows the frame, so a short window cannot put
+     the theme toggle out of reach. */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rail__brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  min-height: var(--control-height);
+}
+
+/* The slug of the sheet: set in mono, tracked out, quiet. A proof carries its
+   identity in the margin, not as a logo. */
+.rail__brand-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.rail__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* A `ul` still brings its marker and its 40px indent. Both were showing: the
+     destinations sat in the rail as a bulleted list. */
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* WCAG 2.5.8: no target below 24x24. */
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background var(--duration-state) var(--easing);
+}
+
+.rail__link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* The current destination is marked by a bar as well as a tint, so it survives
+   forced-colors and does not depend on a background alone. */
+.rail__link[aria-current='page'] {
+  position: relative;
+  background: var(--accent-wash);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rail__link[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.rail__link-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.rail__count {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.rail__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* --- content ------------------------------------------------------------- */
+
+/* Slug line above, sheet below. `minmax(0, 1fr)` on the second row is what
+   lets the sheet actually shrink and scroll instead of pushing the frame.
+   This is the `main` landmark, so the skip link lands on the title. */
+.frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.frame:focus {
+  outline: none;
+}
+
+/* The fixed head of the sheet: where you are, and what this place is for. It
+   does not travel with the content. */
+.slug {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.slug__title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The one region on the page that scrolls. */
+.sheet {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* Prose caps at a readable measure even when the panel is wide. Machine facts
+   — excerpts, tables, hashes — deliberately do not, because breaking them
+   costs more than the line length does. */
+.section__hint,
+.callout p,
+.empty p {
+  max-width: 78ch;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stack--tight {
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Flex items default to min-width:auto, which means they refuse to shrink below
+   their content. One long unbreakable string in a row is then enough to widen
+   the whole page. Controls set their own minimum in components.css, which is
+   loaded after this. */
+.row > *,
+.stack > * {
+  min-width: 0;
+}
+
+.row--between {
+  justify-content: space-between;
+}
+
+/* Both tracks are minmax(0, …). A bare `2fr` track takes its minimum from its
+   content, and a table's min-content width is the sum of its columns — so at
+   200% text the queue pushed the page 1504px wide inside a 1281px viewport
+   (WCAG 1.4.4). Cards wrapped and hid this; tables do not. */
+.grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* --- filling the sheet --------------------------------------------------- */
+
+/* A screen that wants the whole sheet rather than as much of it as its content
+   happens to need. The sheet is a flex column, so a child claiming `flex: 1`
+   with `min-height: 0` gets exactly what is left and no more. */
+.fill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- overview ------------------------------------------------------------ */
+
+/* Two columns that reach the bottom of the frame together.
+ *
+ * This was a 2fr/1fr grid of free-standing panels: the queue finished a third
+ * of the way down the left while the right ran on past the fold, so the screen
+ * read as a short column beside a long one with a ragged hole under it. Here
+ * both columns are the full height of the sheet, they are divided by a rule
+ * rather than by a gap, and each scrolls on its own — so the pair always meets
+ * the frame as one rectangle, whatever either side happens to contain. */
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+/* The work column is a full-height panel, not a short table floating in an
+   empty half of the screen. The queue's own box reaches the bottom of the frame
+   and its rows scroll inside it, under a header that stays put — so the column
+   reads as one ruled region whether it holds three rows or sixty. */
+.overview__work {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-right: var(--space-6);
+}
+
+.overview__work > section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.overview__work .table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* An empty queue is still the shape of the column it is the state of. */
+.overview__work .empty {
+  flex: 1;
+}
+
+.overview__state {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border);
+}
+
+/* Inside the state column the regions are ruled off from each other, not boxed.
+   A card within a column that is itself a panel is a box inside a box. */
+.overview__state > section + section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.overview__state .card {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* --- list / detail ------------------------------------------------------- */
+
+/* Below 1023px SplitView stops rendering this at all and hands the detail to a
+   Drawer instead — there is no collapsed version of this rule, because there is
+   no collapsed version of the layout.
+
+   The tracks are minmax(0, 1fr), NOT the pane minimums. Those are rem, and a rem
+   floor doubles with the browser's text-size setting: at 200% the two of them
+   demand about 1472px inside a 1280px viewport, which is a horizontal scrollbar
+   on the page body and a WCAG 1.4.4 failure. A pane narrower than its ideal is
+   a worse read; a page that scrolls sideways is a broken one. The minimums stay
+   as tokens because they are what justifies the collapse breakpoint. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--split-gap);
+  align-items: start;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Inside the fixed frame each pane owns its own scroll, so a long queue and a
+   long record never fight over one scrollbar and neither can push the other off
+   the screen. The split fills the sheet rather than growing past it. */
+.split {
+  min-height: 0;
+  flex: 1;
+}
+
+/* Nothing selected: one column, and the list has the sheet to itself. */
+.split--closed {
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pane {
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The margin: the source apparatus for whatever is selected, ruled off from the
+   sheet by a single line rather than floated above it on a shadow. */
+.pane--detail {
+  padding: 0 0 var(--space-4) var(--split-gap);
+  border-left: 1px solid var(--border);
+}
+
+.pane__head {
+  /* Pinned inside the pane's own scroll, so Close stays reachable on a long
+     record without scrolling back up for it. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* --- responsive ---------------------------------------------------------- */
+
+/* Below this the two-column overview stops holding a readable measure. It
+   becomes one column that scrolls as a whole — still a single scrollbar, just
+   one region instead of two. */
+@media (max-width: 1180px) {
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .overview__work,
+  .overview__state {
+    overflow-y: visible;
+    padding: 0;
+    border-left: none;
+  }
+
+  .overview__state {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* The rail's labels stop fitting; it becomes an icon rail with accessible
+   names still attached to each link. */
+@media (max-width: 1023px) {
+  .app {
+    grid-template-columns: var(--rail-width-compact) minmax(0, 1fr);
+  }
+
+  .rail__link-label,
+  .rail__count,
+  .rail__brand-name {
+    /* Not display:none — the accessible name must survive. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .rail__link {
+    justify-content: center;
+  }
+}
+
+/* Single column, and the fixed frame is given up deliberately.
+ *
+ * Dividing one viewport into a rail, a slug line and two scroll regions needs
+ * room to be worth having. At this width — and this is also 1280px at 200% or
+ * 400% zoom, which is who actually gets here — it would leave a few lines of
+ * work visible inside a nest of scrollbars. Document flow is the honest answer:
+ * the page scrolls, the rail stays pinned at the top, and nothing is trapped. */
+@media (max-width: 767px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .frame {
+    min-height: 0;
+  }
+
+  .sheet {
+    overflow-y: visible;
+    padding: var(--space-4);
+  }
+
+  .slug {
+    padding: var(--space-4);
+  }
+
+  .split,
+  .pane {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .pane--detail {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .rail {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    /* Back to normal flow as a top bar: sticky at full height would eat the
+       screen. It stays pinned so navigation is always reachable. */
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    height: auto;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .rail__link[aria-current='page']::before {
+    inset: auto 15% 0 15%;
+    width: auto;
+    height: 2px;
+  }
+
+  .rail__nav {
+    flex-direction: row;
+  }
+
+  .rail__footer {
+    margin-top: 0;
+    margin-left: auto;
+    flex-direction: row;
+  }
+
+}
+
+/* The 1.4.10 floor. Controls go full width, nothing is side-by-side, and the
+   page itself still does not scroll horizontally — only the few containers
+   that are allowed to (excerpts, code, wide tables). */
+@media (max-width: 479px) {
+  .sheet {
+    padding: var(--space-3);
+    gap: var(--space-4);
+  }
+
+  .slug {
+    flex-direction: column;
+    padding: var(--space-3);
+  }
+
+  .row {
+    align-items: stretch;
+  }
+}

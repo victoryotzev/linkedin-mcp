@@ -1,0 +1,39 @@
+/* Bundle entry for styles. Order matters: tokens define the variables the rest
+   consume, base resets and sets typography, layout builds the shell, components
+   dress what sits inside it. */
+
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+
+/* --- server-rendered boot fallback ---------------------------------------
+   Visible only when the client never ran: main.tsx clears #root on mount, so
+   reaching this state means the bundle failed to load or parse. It lives here
+   rather than in components.css because it is the one thing that must render
+   without any JavaScript at all. */
+
+.boot-fallback {
+  max-width: 60ch;
+  margin: var(--space-8) auto;
+  padding: var(--space-6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-1);
+}
+
+.boot-fallback h1 {
+  margin-bottom: var(--space-3);
+  color: var(--danger);
+}
+
+.boot-fallback p {
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+}
+
+.boot-fallback code,
+.boot-fallback li {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
