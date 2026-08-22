@@ -20,19 +20,19 @@ describe('shared application data home, on Windows', () => {
   });
 
   it('derives the default from LOCALAPPDATA', () => {
-    expect(resolveDataHome({ LOCALAPPDATA: 'C:\\Users\\member\\AppData\\Local' })).toBe(
+    expect(resolveDataHome({ LOCALAPPDATA: 'C:\\Users\\member\\AppData\\Local' }, 'win32')).toBe(
       'C:\\Users\\member\\AppData\\Local\\linkedin-mcp',
     );
   });
 
   it('refuses a relative override that would split state by working directory', () => {
-    expect(() => resolveDataHome({ LINKEDIN_MCP_HOME: '.\\linkedin-mcp' })).toThrow(
+    expect(() => resolveDataHome({ LINKEDIN_MCP_HOME: '.\\linkedin-mcp' }, 'win32')).toThrow(
       /must be an absolute path/,
     );
   });
 
   it('refuses a volume root as an application home', () => {
-    expect(() => resolveDataHome({ LINKEDIN_MCP_HOME: 'C:\\' })).toThrow(
+    expect(() => resolveDataHome({ LINKEDIN_MCP_HOME: 'C:\\' }, 'win32')).toThrow(
       /cannot be a filesystem root/,
     );
   });

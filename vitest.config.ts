@@ -37,7 +37,13 @@ export default defineConfig({
     // pay for a DOM they never touch.
     // DB and process-spawning tests are I/O-bound; keep the default pool but
     // give slow Windows CI room.
-    testTimeout: 30000,
+    //
+    // Raised from 30s after the cross-platform matrix landed. Twelve tests on
+    // the windows-latest runner reported 16-31s for work that takes single-
+    // digit milliseconds locally — contention on a four-CPU runner, not a
+    // change in what any of them does. The ceiling is there to catch a hang,
+    // and 30s had stopped separating a hang from a busy machine.
+    testTimeout: 60000,
     // Several suites spawn OS processes: PowerShell for every DPAPI call, node
     // children for the WAL-contention and eval harnesses. Unbounded file
     // parallelism stampedes them and produces timeouts that look like logic
