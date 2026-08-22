@@ -305,7 +305,11 @@ async function collectCandidates(
   switch (source.kind) {
     case 'document': {
       assertUnderSizeCap(source.root_path, maxFileBytes);
-      const name = source.root_path.split('\\').pop() ?? 'document';
+      // Split on either separator. Splitting on backslash alone left the whole
+      // absolute path as the artifact's name on Linux — stored, indexed and
+      // shown wherever a file name belongs, and in breach of this file's own
+      // rule a few lines up that a relpath may not contain a separator.
+      const name = source.root_path.split(/[\\/]/).pop() || 'document';
       return [
         {
           relpath: name,

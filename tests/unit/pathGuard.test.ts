@@ -9,6 +9,7 @@ import {
   isReparsePoint,
 } from '@linkedin-mcp/importers';
 import { DomainError } from '@linkedin-mcp/shared';
+import { IS_WINDOWS } from '../helpers/platform.ts';
 
 let root: string;
 
@@ -31,18 +32,23 @@ function codeOf(fn: () => void): string {
 }
 
 describe('pathGuard', () => {
+  // The Windows rule set, named explicitly rather than inherited from whoever
+  // is running the suite, so these still assert Windows behaviour on the Linux
+  // runner. tests/unit/path-guard-platforms.test.ts covers both sets in full.
   it('rejects UNC and device paths', () => {
-    expect(codeOf(() => canonicalizePath('\\\\server\\share\\x'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('\\\\?\\C:\\Windows'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('\\\\.\\PhysicalDrive0'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('//server/share'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('\\\\server\\share\\x', 'win32'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('\\\\?\\C:\\Windows', 'win32'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('\\\\.\\PhysicalDrive0', 'win32'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('//server/share', 'win32'))).toBe('PATH_REJECTED');
   });
 
   it('rejects alternate data streams and reserved device names', () => {
-    expect(codeOf(() => canonicalizePath('C:\\temp\\file.txt:hidden'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('C:\\temp\\CON'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('C:\\temp\\NUL.txt'))).toBe('PATH_REJECTED');
-    expect(codeOf(() => canonicalizePath('C:\\temp\\COM1'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('C:\\temp\\file.txt:hidden', 'win32'))).toBe(
+      'PATH_REJECTED',
+    );
+    expect(codeOf(() => canonicalizePath('C:\\temp\\CON', 'win32'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('C:\\temp\\NUL.txt', 'win32'))).toBe('PATH_REJECTED');
+    expect(codeOf(() => canonicalizePath('C:\\temp\\COM1', 'win32'))).toBe('PATH_REJECTED');
   });
 
   // The assertions above all name paths that do not exist, so realpathSync
@@ -50,7 +56,13 @@ describe('pathGuard', () => {
   // These two use fixtures that really exist, so the shape check is the only
   // thing that can reject them — and each carries a control proving the same
   // path IS accepted without the hostile shape.
-  it('rejects a real alternate data stream, not merely a missing path', () => {
+  //
+  // Both are Windows-gated because both need NTFS to mean anything: a colon is
+  // an ordinary filename character elsewhere, and `\\?\` is a Windows prefix,
+  // not a shape any other filesystem can produce. Writing them as
+  // platform-parameterised tests would prove the rule without proving the
+  // filesystem really behaves that way, which is the half that matters here.
+  it.skipIf(!IS_WINDOWS)('rejects a real alternate data stream, not merely a missing path', () => {
     const base = join(root, 'file.txt');
     writeFileSync(base, 'visible content');
     const ads = `${base}:hidden`;
@@ -61,25 +73,31 @@ describe('pathGuard', () => {
     expect(canonicalizePath(base).length).toBeGreaterThan(0);
   });
 
-  it('rejects a verbatim \\\\?\\ prefix on a directory that really exists', () => {
-    expect(codeOf(() => canonicalizePath(`\\\\?\\${root}`))).toBe('PATH_REJECTED');
-    // Control: the same directory without the prefix canonicalizes fine.
-    expect(canonicalizePath(root).length).toBeGreaterThan(0);
-  });
+  it.skipIf(!IS_WINDOWS)(
+    'rejects a verbatim \\\\?\\ prefix on a directory that really exists',
+    () => {
+      expect(codeOf(() => canonicalizePath(`\\\\?\\${root}`))).toBe('PATH_REJECTED');
+      // Control: the same directory without the prefix canonicalizes fine.
+      expect(canonicalizePath(root).length).toBeGreaterThan(0);
+    },
+  );
 
   it('rejects relative paths and nonexistent paths', () => {
     expect(codeOf(() => canonicalizePath('relative\\path'))).toBe('PATH_REJECTED');
     expect(codeOf(() => canonicalizePath(join(root, 'does-not-exist')))).toBe('PATH_REJECTED');
   });
 
-  it('canonicalizes real paths and containment is per-segment, case-insensitive', () => {
+  it('canonicalizes real paths, and containment is per-segment', () => {
     const canonical = canonicalizePath(root);
     expect(isContainedIn(canonical, canonical)).toBe(true);
 
     mkdirSync(join(root, 'inside'));
     const child = canonicalizePath(join(root, 'inside'));
     expect(isContainedIn(canonical, child)).toBe(true);
-    expect(isContainedIn(canonical, child.toUpperCase())).toBe(true);
+    // Case folding is a Windows property, not a general one: on Linux the
+    // upper-cased path names a directory that does not exist, and reporting it
+    // as contained would be how a source escapes its registered root.
+    expect(isContainedIn(canonical, child.toUpperCase())).toBe(IS_WINDOWS);
 
     // Prefix trap: root 'abc' must not contain sibling 'abcdef'.
     const sibling = mkdtempSync(`${root}-sibling-`);

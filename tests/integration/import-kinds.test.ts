@@ -73,6 +73,12 @@ describe('pointing at a single document', () => {
 
     expect(report.files_imported).toBe(1);
     expect(relpaths()).toEqual(['cv.pdf']);
+    // The invariant, not just the value. A relpath is a file name and never a
+    // path: it is stored, indexed and shown wherever a name belongs. Splitting
+    // the source path on backslash alone left the whole absolute path here on
+    // Linux, and the equality above is only accidentally sensitive to that —
+    // on Windows it passes either way.
+    expect(relpaths().every((relpath) => !/[\\/]/.test(relpath))).toBe(true);
   }, 60_000);
 
   it('reads the text out of it, so claims can cite a line rather than a filename', async () => {

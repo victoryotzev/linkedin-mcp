@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { resolveDataHome } from '@linkedin-mcp/shared';
 
-describe('shared application data home', () => {
+// The Windows side of data-home resolution, stated as such.
+//
+// Every case here is about Windows paths and the LOCALAPPDATA default, so the
+// platform is passed explicitly rather than inherited from whoever is running
+// the suite. tests/unit/data-home-platforms.test.ts covers both defaults, from
+// either host.
+describe('shared application data home, on Windows', () => {
   it('uses and normalizes one explicit absolute home', () => {
     expect(
-      resolveDataHome({
-        LINKEDIN_MCP_HOME: 'C:\\Users\\member\\AppData\\Local\\linkedin-mcp\\',
-      }),
+      resolveDataHome(
+        {
+          LINKEDIN_MCP_HOME: 'C:\\Users\\member\\AppData\\Local\\linkedin-mcp\\',
+        },
+        'win32',
+      ),
     ).toBe('C:\\Users\\member\\AppData\\Local\\linkedin-mcp');
   });
 
@@ -29,6 +38,8 @@ describe('shared application data home', () => {
   });
 
   it('fails clearly when neither location is available', () => {
-    expect(() => resolveDataHome({})).toThrow(/Neither LINKEDIN_MCP_HOME nor LOCALAPPDATA/);
+    expect(() => resolveDataHome({}, 'win32')).toThrow(
+      /Neither LINKEDIN_MCP_HOME nor LOCALAPPDATA/,
+    );
   });
 });

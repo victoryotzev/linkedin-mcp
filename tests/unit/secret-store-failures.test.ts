@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { migrate, openDatabase, type SqliteDriver } from '@linkedin-mcp/db';
-import { createSecretStore } from '../../packages/domain/src/secretStore.ts';
+import { createSecretStore, dpapiKeyWrapper } from '../../packages/domain/src/secretStore.ts';
+
+// Pinned to DPAPI for the same reason as dpapi-exchange.test.ts: these cases
+// are about how the Windows vault fails, and a Linux runner would otherwise
+// exercise a different wrapper entirely.
+const dpapiStore = (database: SqliteDriver, dataHome: string) =>
+  createSecretStore(database, dataHome, { wrapper: dpapiKeyWrapper() });
 
 // What the vault does when DPAPI will not cooperate.
 //
@@ -59,7 +65,7 @@ describe('when Windows PowerShell cannot be started', () => {
     // Pointing SystemRoot at nothing reproduces a host where Windows PowerShell
     // has been removed, relocated or blocked by an endpoint agent.
     vi.stubEnv('SystemRoot', join(home, 'no-such-windows'));
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     const failure = await store.put('linkedin.access_token.read', TOKEN).catch((e: unknown) => e);
 
@@ -71,7 +77,7 @@ describe('when Windows PowerShell cannot be started', () => {
 
   it('reports the same way on a read', async () => {
     vi.stubEnv('SystemRoot', join(home, 'no-such-windows'));
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     // With no master key on disk there is nothing to unwrap, so the read is
     // answered without ever reaching DPAPI.
@@ -90,7 +96,7 @@ describe('a secrets folder that came from somewhere else', () => {
         Buffer.from('not the bytes DPAPI wrapped on this machine').toString('base64'),
         { encoding: 'utf8' },
       );
-      const store = createSecretStore(db, home);
+      const store = dpapiStore(db, home);
 
       const failure = await store.put('linkedin.access_token.read', TOKEN).catch((e: unknown) => e);
 
@@ -104,7 +110,7 @@ describe('a secrets folder that came from somewhere else', () => {
   it.runIf(HAS_DPAPI)(
     'refuses a secret encrypted under a different master key',
     async () => {
-      const store = createSecretStore(db, home);
+      const store = dpapiStore(db, home);
       await store.put('linkedin.access_token.read', TOKEN);
 
       // The row survives, the key it was encrypted under does not: exactly what
@@ -122,11 +128,11 @@ describe('a secrets folder that came from somewhere else', () => {
   it.runIf(HAS_DPAPI)(
     'reports a deleted master key as permanent, not as a reason to mint a new one',
     async () => {
-      const store = createSecretStore(db, home);
+      const store = dpapiStore(db, home);
       await store.put('linkedin.access_token.read', TOKEN);
       rmSync(join(home, 'secrets'), { recursive: true, force: true });
 
-      const fresh = createSecretStore(db, home);
+      const fresh = dpapiStore(db, home);
 
       // Minting a new key here would leave the stored ciphertext silently
       // undecryptable while everything looked healthy.
@@ -142,7 +148,7 @@ describe('the key file itself', () => {
   it.runIf(HAS_DPAPI)(
     'holds no plaintext and is written for this user only',
     async () => {
-      const store = createSecretStore(db, home);
+      const store = dpapiStore(db, home);
       await store.put('linkedin.access_token.read', TOKEN);
 
       const keyFile = readFileSync(join(home, 'secrets', 'master.key.dpapi'), 'utf8');
@@ -156,8 +162,8 @@ describe('the key file itself', () => {
   it.runIf(HAS_DPAPI)(
     'survives two stores opening the same home at once',
     async () => {
-      const first = createSecretStore(db, home);
-      const second = createSecretStore(db, home);
+      const first = dpapiStore(db, home);
+      const second = dpapiStore(db, home);
 
       // The MCP server and the dashboard both run against one home. Whichever
       // wrote the key file first owns it; the other must adopt it rather than
@@ -179,7 +185,7 @@ describe('the key file itself', () => {
 describe('names and values', () => {
   it('refuses a name outside the allowlist without touching DPAPI', async () => {
     vi.stubEnv('SystemRoot', join(home, 'no-such-windows'));
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     // The check is before the key work, so a bad name fails fast and cannot be
     // used to make the process spawn anything.
@@ -189,7 +195,7 @@ describe('names and values', () => {
 
   it('reports whether a name is present without decrypting it', () => {
     vi.stubEnv('SystemRoot', join(home, 'no-such-windows'));
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     expect(store.has('linkedin.access_token.read')).toBe(false);
     expect(store.listNames()).toEqual([]);

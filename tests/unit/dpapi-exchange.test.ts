@@ -104,7 +104,16 @@ function fakePowerShell(args: readonly string[]): unknown {
   return child;
 }
 
-const { createSecretStore } = await import('../../packages/domain/src/secretStore.ts');
+const { createSecretStore, dpapiKeyWrapper } = await import(
+  '../../packages/domain/src/secretStore.ts'
+);
+
+// Always the DPAPI wrapper, whatever host is running this. Every case in this
+// file is about the exchange with powershell.exe; without pinning it, a Linux
+// runner would build the machine-key wrapper instead, spawn nothing, and pass
+// the file by never reaching the thing it exists to test.
+const dpapiStore = (database: SqliteDriver, dataHome: string) =>
+  createSecretStore(database, dataHome, { wrapper: dpapiKeyWrapper() });
 
 const TOKEN = 'AQV-fake-fixture-token-not-a-real-credential-0123456789';
 const NAME = 'linkedin.access_token.read';
@@ -136,7 +145,7 @@ afterEach(() => {
 
 describe('the exchange when it works', () => {
   it('wraps once and reuses the key for the rest of the process', async () => {
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     await store.put(NAME, TOKEN);
     await store.put('linkedin.client_id.read', 'cid-read');
@@ -148,16 +157,16 @@ describe('the exchange when it works', () => {
   });
 
   it('unwraps the key from disk in a second store over the same home', async () => {
-    await createSecretStore(db, home).put(NAME, TOKEN);
+    await dpapiStore(db, home).put(NAME, TOKEN);
     ops.length = 0;
 
-    expect(await createSecretStore(db, home).get(NAME)).toBe(TOKEN);
+    expect(await dpapiStore(db, home).get(NAME)).toBe(TOKEN);
     expect(ops).toEqual(['Unprotect']);
   });
 
   it('falls back to a bare interpreter name when SystemRoot is unset', async () => {
     vi.stubEnv('SystemRoot', '');
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     // The absolute path exists so a powershell.exe planted earlier on PATH
     // cannot be handed the master key. With no SystemRoot there is no absolute
@@ -168,7 +177,7 @@ describe('the exchange when it works', () => {
   });
 
   it('trims a pasted value, because a trailing newline reads as a dead token', async () => {
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
 
     await store.put(NAME, `  ${TOKEN}\r\n`);
 
@@ -182,7 +191,7 @@ describe('when powershell cannot be started', () => {
   it('names the missing interpreter and says the rest of the product works', async () => {
     behaviour = { kind: 'spawn-error', code: 'ENOENT' };
 
-    await expect(createSecretStore(db, home).put(NAME, TOKEN)).rejects.toThrow(
+    await expect(dpapiStore(db, home).put(NAME, TOKEN)).rejects.toThrow(
       /rest of the product works/i,
     );
   });
@@ -192,7 +201,7 @@ describe('when powershell cannot be started', () => {
 
     // "Not found" would send the member looking for a file that is right there;
     // this is a blocked or broken start, and the remedy is different.
-    const failure = await createSecretStore(db, home)
+    const failure = await dpapiStore(db, home)
       .put(NAME, TOKEN)
       .catch((e: unknown) => e);
 
@@ -206,7 +215,7 @@ describe('when powershell cannot be started', () => {
     // Key material goes over stdin precisely because argv is readable by every
     // process on the machine. With no stdin there is no safe way to hand it
     // over, so the exchange does not happen at all.
-    await expect(createSecretStore(db, home).put(NAME, TOKEN)).rejects.toThrow(/pipes/i);
+    await expect(dpapiStore(db, home).put(NAME, TOKEN)).rejects.toThrow(/pipes/i);
   });
 });
 
@@ -215,7 +224,7 @@ describe('when powershell answers badly', () => {
     vi.useFakeTimers();
     behaviour = { kind: 'hang' };
 
-    const attempt = createSecretStore(db, home).put(NAME, TOKEN);
+    const attempt = dpapiStore(db, home).put(NAME, TOKEN);
     const settled = attempt.catch((e: unknown) => e);
     await vi.advanceTimersByTimeAsync(20_000);
 
@@ -229,7 +238,7 @@ describe('when powershell answers badly', () => {
   it('reports a failed wrap as nothing stored, not as a corrupt vault', async () => {
     behaviour = { kind: 'exit', code: 1, out: '' };
 
-    const failure = await createSecretStore(db, home)
+    const failure = await dpapiStore(db, home)
       .put(NAME, TOKEN)
       .catch((e: unknown) => e);
 
@@ -244,7 +253,7 @@ describe('when powershell answers badly', () => {
 
     // Exit zero is not enough. A .NET warning on stdout would otherwise be
     // decoded as key material.
-    await expect(createSecretStore(db, home).put(NAME, TOKEN)).rejects.toThrow(/refused to wrap/i);
+    await expect(dpapiStore(db, home).put(NAME, TOKEN)).rejects.toThrow(/refused to wrap/i);
   });
 
   it('tells a member whose secrets folder came from elsewhere to delete it', async () => {
@@ -252,17 +261,17 @@ describe('when powershell answers badly', () => {
     writeFileSync(keyPath(), Buffer.from('from another machine').toString('base64'), 'utf8');
     behaviour = { kind: 'exit', code: 1, out: '' };
 
-    const failure = await createSecretStore(db, home)
+    const failure = await dpapiStore(db, home)
       .get(NAME)
       .catch((e: unknown) => e);
 
     // Nothing is stored under this name, so the read is answered without DPAPI.
     expect(failure).toBeNull();
 
-    await createSecretStore(db, home)
+    await dpapiStore(db, home)
       .put(NAME, TOKEN)
       .catch(() => {});
-    const onRead = await createSecretStore(db, home)
+    const onRead = await dpapiStore(db, home)
       .put('linkedin.client_id.read', 'cid')
       .catch((e: unknown) => e);
 
@@ -276,10 +285,8 @@ describe('when powershell answers badly', () => {
     // Identity-wrapped, so it unwraps cleanly and is still not an envelope.
     writeFileSync(keyPath(), Buffer.alloc(12, 7).toString('base64'), 'utf8');
 
-    await expect(createSecretStore(db, home).get(NAME)).resolves.toBeNull();
-    await expect(createSecretStore(db, home).put(NAME, TOKEN)).rejects.toThrow(
-      /master key envelope/i,
-    );
+    await expect(dpapiStore(db, home).get(NAME)).resolves.toBeNull();
+    await expect(dpapiStore(db, home).put(NAME, TOKEN)).rejects.toThrow(/master key envelope/i);
   });
 });
 
@@ -296,7 +303,7 @@ describe('two processes opening one home at the same time', () => {
       },
     };
 
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
     await store.put(NAME, TOKEN);
 
     // Clobbering would strand every row the winner had already encrypted, so
@@ -316,7 +323,7 @@ describe('a secrets row written by something other than this store', () => {
   // rebuilt here without STRICT, which is exactly what "written by something
   // other than this store" means.
   async function foreignRow(column: string): Promise<void> {
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
     await store.put(NAME, TOKEN);
     const keyId = String(db.get('SELECT key_id FROM secrets WHERE name = ?', NAME)?.['key_id']);
 
@@ -348,13 +355,13 @@ describe('a secrets row written by something other than this store', () => {
   it('refuses a row whose iv column is not binary', async () => {
     await foreignRow('iv');
 
-    await expect(createSecretStore(db, home).get(NAME)).rejects.toThrow(/non-binary iv/i);
+    await expect(dpapiStore(db, home).get(NAME)).rejects.toThrow(/non-binary iv/i);
   });
 
   it('refuses a row whose auth tag column is not binary', async () => {
     await foreignRow('auth_tag');
 
-    await expect(createSecretStore(db, home).get(NAME)).rejects.toThrow(/non-binary auth_tag/i);
+    await expect(dpapiStore(db, home).get(NAME)).rejects.toThrow(/non-binary auth_tag/i);
   });
 
   it('refuses a row whose ciphertext column is not binary', async () => {
@@ -362,13 +369,13 @@ describe('a secrets row written by something other than this store', () => {
 
     // Every one of these says the row came from somewhere else, because that is
     // the actionable fact: this store never writes a text column here.
-    await expect(createSecretStore(db, home).get(NAME)).rejects.toThrow(/non-binary ciphertext/i);
+    await expect(dpapiStore(db, home).get(NAME)).rejects.toThrow(/non-binary ciphertext/i);
   });
 });
 
 describe('a transient failure', () => {
   it('does not poison the store for the life of the process', async () => {
-    const store = createSecretStore(db, home);
+    const store = dpapiStore(db, home);
     behaviour = { kind: 'exit', code: 1, out: '' };
     await expect(store.put(NAME, TOKEN)).rejects.toThrow();
 

@@ -9,6 +9,7 @@ import {
   rmSync,
   rmdirSync,
   statSync,
+  unlinkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -100,9 +101,12 @@ describe('backup and restore', () => {
       expect(verification.problems).toEqual([]);
       expect(verification.valid).toBe(true);
     } finally {
-      // rmdir removes the reparse point; the target is `home` and is cleaned
-      // by afterEach. Never recursive here — that would delete the real tree.
-      rmdirSync(linked);
+      // Remove the link, never the target — `home` is cleaned by afterEach and
+      // a recursive delete here would take the real tree with it. Windows makes
+      // a junction, which is a directory and needs rmdir; Linux ignores the
+      // 'junction' hint and makes a symlink, where rmdir is ENOTDIR.
+      if (process.platform === 'win32') rmdirSync(linked);
+      else unlinkSync(linked);
     }
   });
 
