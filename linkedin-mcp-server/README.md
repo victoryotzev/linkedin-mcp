@@ -53,10 +53,16 @@ Choose one or more clients when prompted. The assistant:
 Non-interactive examples:
 
 ```powershell
-.\setup-mcp.ps1 -Clients Codex,ClaudeCode,Cursor -NonInteractive
-.\setup-mcp.ps1 -All -NonInteractive -DataHome "D:\LinkedIn-MCP-Data"
-.\setup-mcp.ps1 -All -NonInteractive -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -Clients Codex,ClaudeCode,Cursor -NonInteractive
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -All -NonInteractive -DataHome "D:\LinkedIn-MCP-Data"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -All -NonInteractive -DryRun
 ```
+
+Windows refuses to run an unsigned `.ps1` under its default `Restricted`
+execution policy, so a bare `.\setup-mcp.ps1` fails before it does anything.
+`-ExecutionPolicy Bypass` applies to that one invocation and changes nothing on
+the machine; `npm run setup:mcp` uses the same form. Start with `-DryRun`, which
+names every file it would touch without opening any of them for writing.
 
 Restart selected clients after setup. Run the assistant again whenever the repository moves; it is idempotent and updates the absolute server path.
 

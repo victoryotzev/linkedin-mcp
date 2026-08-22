@@ -56,8 +56,15 @@ npm run setup:mcp
 **See what it would do first:**
 
 ```powershell
-.\setup-mcp.ps1 -All -NonInteractive -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -All -NonInteractive -DryRun
 ```
+
+Windows refuses to run an unsigned `.ps1` under its default `Restricted`
+execution policy, so a bare `.\setup-mcp.ps1` fails before it does anything.
+`-ExecutionPolicy Bypass` applies to that one invocation and changes nothing on
+the machine — which is also exactly what `npm run setup:mcp` does. Read the
+script first if you would rather not take that on trust; `-DryRun` prints every
+file it would touch without opening any of them for writing.
 
 The assistant edits configuration files that belong to other applications, so
 it is worth knowing which before you let it run. Depending on the clients you
@@ -90,8 +97,8 @@ The dashboard prints a single-use URL for `http://127.0.0.1:4780`. See [dashboar
 For repeatable or unattended setup:
 
 ```powershell
-.\setup-mcp.ps1 -Clients Codex,Cursor,VSCode -NonInteractive
-.\setup-mcp.ps1 -All -NonInteractive
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -Clients Codex,Cursor,VSCode -NonInteractive
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -All -NonInteractive
 ```
 
 Use `-DataHome "C:\absolute\path"` to choose a different shared home. The assistant saves that absolute path as the current user's `LINKEDIN_MCP_HOME`; open a new terminal before starting the dashboard so it inherits a newly saved custom value. Pass `-NoPersistUserEnvironment` if you only want the selected client entries changed. The assistant never asks for or writes LinkedIn credentials.
