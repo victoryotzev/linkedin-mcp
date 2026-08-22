@@ -104,7 +104,9 @@ describe('the file:line citations in the documentation', () => {
       const length = readFileSync(path, 'utf8').split(/\r?\n/).length;
       const last = c.end ?? c.start;
       if (last > length) {
-        past.push(`${c.source}:${c.sourceLine} cites ${c.target}:${c.start}-${last}, which has ${length} lines`);
+        past.push(
+          `${c.source}:${c.sourceLine} cites ${c.target}:${c.start}-${last}, which has ${length} lines`,
+        );
       }
     }
     expect(past).toEqual([]);
@@ -122,7 +124,9 @@ describe('the file:line citations in the documentation', () => {
       const line = lines[c.start - 1];
       if (line === undefined) continue;
       if (isEmptyOfMeaning(line)) {
-        adrift.push(`${c.source}:${c.sourceLine} cites ${c.target}:${c.start}, which is ${JSON.stringify(line.trim())}`);
+        adrift.push(
+          `${c.source}:${c.sourceLine} cites ${c.target}:${c.start}, which is ${JSON.stringify(line.trim())}`,
+        );
       }
     }
     expect(adrift).toEqual([]);
