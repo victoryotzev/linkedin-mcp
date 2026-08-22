@@ -2,15 +2,16 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "baseUrl": ".",
+    // No `baseUrl`: TypeScript 7 removed it, and every path below is now
+    // relative to this file rather than to a base directory it set.
     "paths": {
-      "@linkedin-mcp/shared": ["packages/shared/src/index.ts"],
-      "@linkedin-mcp/db": ["packages/db/src/index.ts"],
-      "@linkedin-mcp/domain": ["packages/domain/src/index.ts"],
-      "@linkedin-mcp/importers": ["packages/importers/src/index.ts"],
-      "@linkedin-mcp/linkedin": ["packages/linkedin/src/index.ts"],
-      "@linkedin-mcp/server/dashboard": ["linkedin-mcp-server/src/dashboardBridge.ts"],
-      "@linkedin-mcp/importers/package.json": ["packages/importers/package.json"]
+      "@linkedin-mcp/shared": ["./packages/shared/src/index.ts"],
+      "@linkedin-mcp/db": ["./packages/db/src/index.ts"],
+      "@linkedin-mcp/domain": ["./packages/domain/src/index.ts"],
+      "@linkedin-mcp/importers": ["./packages/importers/src/index.ts"],
+      "@linkedin-mcp/linkedin": ["./packages/linkedin/src/index.ts"],
+      "@linkedin-mcp/server/dashboard": ["./linkedin-mcp-server/src/dashboardBridge.ts"],
+      "@linkedin-mcp/importers/package.json": ["./packages/importers/package.json"]
     }
   },
   "include": [
