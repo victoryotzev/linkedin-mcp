@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -56,6 +64,7 @@ function runSetup(root: string) {
 describe.skipIf(!IS_WINDOWS)('interactive MCP setup assistant', () => {
   it('merges selected clients into one shared home and is idempotent', () => {
     const root = mkdtempSync(join(tmpdir(), 'linkedin-mcp-setup-'));
+    const canonicalRoot = realpathSync.native(root);
     temporaryHomes.push(root);
     const configRoot = join(root, 'configs');
     mkdirSync(configRoot, { recursive: true });
@@ -82,8 +91,15 @@ describe.skipIf(!IS_WINDOWS)('interactive MCP setup assistant', () => {
       >;
       const entry = config[rootKey]?.['linkedin'];
       expect(entry?.command).toBe(process.execPath);
-      expect(entry?.args).toEqual([join(root, 'server.js')]);
-      expect(entry?.env['LINKEDIN_MCP_HOME']).toBe(join(root, 'shared-home'));
+      // Against the canonical root, not the one mkdtemp happened to hand out.
+      // The script resolves every path it is given through
+      // [IO.Path]::GetFullPath, which expands an 8.3 alias to its long form,
+      // and writing the long form into a client config is the right thing: a
+      // short name can be turned off per volume and is not stable across
+      // machines. Temp directories are 8.3-aliased on GitHub's own Windows
+      // runners, so this is the ordinary case there rather than an exotic one.
+      expect(entry?.args).toEqual([join(canonicalRoot, 'server.js')]);
+      expect(entry?.env['LINKEDIN_MCP_HOME']).toBe(join(canonicalRoot, 'shared-home'));
     }
 
     const cursor = JSON.parse(readFileSync(join(configRoot, 'cursor-mcp.json'), 'utf8')) as {
