@@ -83,7 +83,7 @@ Rejected alternatives:
 
 A virtual source has no filesystem root. `root_path` is
 `TEXT NOT NULL UNIQUE`, so it carries a namespaced sentinel — the pattern
-already shipped by `dmaObservationService.ts:265`, which registers
+already shipped by `packages/domain/src/dmaObservationService.ts:265`, which registers
 `linkedin://dma`.
 
 - Upload: `upload://<source_id>`

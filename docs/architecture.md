@@ -43,7 +43,7 @@ has to change, only the adapter moves.
 
 `validateToolRegistry` refuses a tool that omits any of the four annotation
 hints, or that claims to be both read-only and destructive
-(`linkedin-mcp-server/src/registry.ts:47-66`). The spec's defaults are
+(`linkedin-mcp-server/src/registry.ts:40-60`). The spec's defaults are
 pessimistic, so omission is never treated as intent.
 
 ### The database driver is a seam
@@ -51,14 +51,14 @@ pessimistic, so omission is never treated as intent.
 Nothing outside `packages/db` touches `node:sqlite`. The driver is acquired
 through `process.getBuiltinModule` rather than a static import, because
 esbuild's builtin list predates `node:sqlite` and would rewrite it to a bare
-`sqlite` package when bundling (`packages/db/src/driver.ts:2-9`). If
+`sqlite` package when bundling (`packages/db/src/driver.ts:3-9`). If
 `node:sqlite` ever becomes unusable, an alternative slots in behind
 `SqliteDriver` without domain code changing
 (`packages/db/src/driver.ts:11-13`).
 
 Every process opens the database through one function so pragma discipline is
 identical everywhere: WAL, `busy_timeout`, foreign keys on, `trusted_schema`
-off (`packages/db/src/open.ts:9-20`).
+off (`packages/db/src/open.ts:12-22`).
 
 ### One data home, resolved one way
 
@@ -76,7 +76,7 @@ There are no down-migrations by design; see [releases.md](releases.md).
 ### Feature gates wrap handlers, not call sites
 
 `toolDefs` wraps each handler in a feature check rather than sprinkling checks
-through the tools (`linkedin-mcp-server/src/catalog.ts:16-40`), and the
+through the tools (`linkedin-mcp-server/src/catalog.ts:17-43`), and the
 dashboard applies the same policy to its routes from the same table. One
 setting, both surfaces.
 

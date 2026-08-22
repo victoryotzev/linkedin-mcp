@@ -41,7 +41,7 @@ so the project does not ship an image.
 | npm | any version shipping with Node 24 | workspaces |
 | Windows PowerShell | 5.1 (ships with Windows) | DPAPI, and the setup assistant |
 | Document formats | PDF, DOCX, CSV, Markdown, plain text, ZIP archives, and source files. No images, so no OCR — see [known-limitations.md](known-limitations.md) |
-| SQLite FTS5 | optional | Search degrades to `LIKE` when absent; safety paths are unaffected (`packages/db/src/open.ts:23-34`) |
+| SQLite FTS5 | optional | Search degrades to `LIKE` when absent; safety paths are unaffected (`packages/db/src/open.ts:84-92`) |
 
 `node:sqlite` is a comparatively young built-in. If a future Node release
 changes its status in a way that breaks this project, the driver seam at

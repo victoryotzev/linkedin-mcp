@@ -97,7 +97,7 @@ verified against it. Remove those and run it again to finish the job.
 
 `purge_all` requires the exact phrase `DELETE ALL LOCAL DATA` and removes
 `data`, `artifacts`, `backups`, `logs`, and `secrets`
-(`packages/domain/src/backupService.ts:381-393`).
+(`packages/domain/src/backupService.ts:422-441`).
 
 Deleting `secrets\master.key.dpapi` is what makes it a crypto-erase: any stray
 ciphertext anywhere becomes permanently undecryptable. There is no recovery, no

@@ -66,7 +66,7 @@ a document — not even your own.
 
 If you change fixture text that a lexical check reads, **preserve the
 significant-token count**. Evidence coverage is token overlap over a
-stopword-filtered set (`packages/domain/src/coverageService.ts:45,58-59,73-74`),
+stopword-filtered set (`packages/domain/src/coverageService.ts:42-46,51-59,68-75`),
 so swapping a two-word company name for a three-word one silently shifts
 coverage ratios and can weaken a test without failing it.
 
@@ -80,7 +80,7 @@ satisfy — inferring intent, accepting a prefix, defaulting a flag — will be
 declined even if the tests pass.
 
 The same goes for: the audit chain gating external actions
-(`packages/domain/src/auditService.ts:244-253`), `live_publishing` defaulting to
+(`packages/domain/src/auditService.ts:246-255`), `live_publishing` defaulting to
 off (`packages/domain/src/featureControlService.ts:70-73`), and ambiguous
 network outcomes never being retried automatically
 (`packages/linkedin/src/adapters.ts:112-133`).

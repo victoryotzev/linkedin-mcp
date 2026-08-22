@@ -144,7 +144,7 @@ a ciphertext moved between lanes.
 *Controls:* AES-256-GCM with the secret name and key id bound in as additional
 authenticated data, so a ciphertext lifted from the read-lane row into the
 write-lane row fails to decrypt rather than silently swapping tokens between two
-LinkedIn apps (`packages/domain/src/secretStore.ts:216-218`). The key id is
+LinkedIn apps (`packages/domain/src/secretStore.ts:214-216`). The key id is
 random and travels *inside* the wrapped blob, so the plaintext `key_id` column
 reveals nothing.
 
@@ -181,8 +181,8 @@ hash. Linking rows proves nothing about the **ends** of the chain, so both ends
 are anchored: the highest sequence ever written and its hash, updated in the
 same transaction as every append — without which deleting the newest events, or
 the whole table, verified as intact
-(`packages/domain/src/auditService.ts:20,199-231`). Every path with an external
-effect calls `requireIntactChain` first (`:244-253`).
+(`packages/domain/src/auditService.ts:20,190-233`). Every path with an external
+effect calls `requireIntactChain` first (`:246-255`).
 
 ### B11 — Backup, export and purge
 

@@ -111,6 +111,14 @@ Read the wording, not just the behaviour.
 
 ## Record
 
+**No pass has been recorded yet.** Everything above needs a human at a real
+display: a screen reader reading real output, forced-colors mode actually on,
+a browser actually zoomed. None of it is covered by the automated suite, and an
+empty row here would read as though someone had looked. Nobody has.
+
+Add a row when you run it, and say which parts you skipped rather than leaving
+them implied.
+
 | Date | Version / commit | Checked by | Notes |
 |---|---|---|---|
-| | | | |
+| _(none)_ | — | — | Checklist not yet performed |

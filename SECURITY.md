@@ -51,7 +51,7 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
 |---|---|
 | Bearer token stripped from error bodies before they can reach a log, message, or MCP result — redaction runs before truncation | `packages/linkedin/src/dmaClient.ts:77-79` |
 | LinkedIn host pinned; redirects refused outright | `packages/linkedin/src/dmaClient.ts:58-67`, `packages/linkedin/src/adapters.ts:100-111` |
-| Tokens encrypted with AES-256-GCM; the name and key id are bound in as AAD, so a ciphertext moved between lanes fails to decrypt instead of silently swapping credentials | `packages/domain/src/secretStore.ts:216-218` |
+| Tokens encrypted with AES-256-GCM; the name and key id are bound in as AAD, so a ciphertext moved between lanes fails to decrypt instead of silently swapping credentials | `packages/domain/src/secretStore.ts:214-216` |
 | Master key wrapped by Windows DPAPI (CurrentUser); key material crosses stdin, never argv; `powershell.exe` resolved by absolute path so a planted binary on `PATH` cannot receive it | `packages/domain/src/secretStore.ts:67-72,88-95` |
 | Secret names are allowlisted — the vault cannot grow into a general key-value store | `packages/domain/src/secretStore.ts:42,256-261` |
 | Backups refuse to contain anything under `secrets/` | `packages/domain/src/backupService.ts:294-295` |
@@ -64,7 +64,7 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
 | Real publishing is off by default and requires a separate explicit toggle | `packages/domain/src/featureControlService.ts:70-73` |
 | Publishing requires a granted approval bound to an exact revision hash plus the exact `PUBLISH <approval_id>` string | `linkedin-mcp-server/src/tools/publish.ts:249-262,344-351` |
 | An uncertain network outcome becomes `ambiguous` and is never retried automatically | `packages/linkedin/src/adapters.ts:112-133` |
-| A broken audit chain blocks approvals and publication | `packages/domain/src/auditService.ts:244-253` |
+| A broken audit chain blocks approvals and publication | `packages/domain/src/auditService.ts:246-255` |
 
 ### Deliberate choices that look like findings but are not
 
