@@ -7,9 +7,14 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 
-- **Windows 10 or later.** This is the only supported platform — see
-  [docs/compatibility.md](docs/compatibility.md) for why, and for what does and
-  does not work elsewhere.
+- **Windows 10 or later, or Linux.** Both are supported and both run the full
+  suite on every push — see [docs/compatibility.md](docs/compatibility.md) for
+  what differs between them, and for why macOS is not on the list.
+- **Test both platforms' rules, from whichever you have.** The path guard, the
+  data-home defaults and the non-DPAPI vault all take the platform as an
+  argument precisely so a contributor on one can prove the other. A change to
+  either rule set that only adds tests for the platform you happen to be on is
+  incomplete.
 - **Node.js 24 or later.** The database uses the built-in `node:sqlite`
   (`packages/db/src/driver.ts:6-9`), so 24 is a hard floor, not a preference.
 - **Windows PowerShell 5.1** for the credential-vault tests. It ships with

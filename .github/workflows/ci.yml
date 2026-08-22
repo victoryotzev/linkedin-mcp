@@ -17,10 +17,18 @@ concurrency:
 
 jobs:
   build-and-test:
-    # Windows only, on purpose. Evidence import accepts drive-letter paths and
-    # the credential vault needs Windows PowerShell, so a Linux lane would
-    # exercise a configuration nobody is asked to run. See docs/compatibility.md.
-    runs-on: windows-latest
+    # Both supported platforms, every push. The path guard and the credential
+    # vault each have two implementations now, and the only way either stays
+    # honest is for both to run somewhere that actually is that platform.
+    #
+    # fail-fast is off deliberately: when one platform breaks, the other's
+    # result is the most useful thing on the page, and cancelling it hides
+    # whether the problem is the change or the platform.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
     steps:
@@ -71,8 +79,14 @@ jobs:
 
   clean-room:
     # A fresh runner with no prior data home is the closest thing this project
-    # has to a clean machine, so first-run behaviour is proved here.
-    runs-on: windows-latest
+    # has to a clean machine, so first-run behaviour is proved here — on both
+    # platforms, because "creates its own home and migrates" is exactly the
+    # claim most likely to be Windows-shaped without anyone noticing.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
 
     steps:
@@ -86,10 +100,12 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # pwsh is present on the Linux runners too, so one script covers both.
+      # Every path is built with Join-Path rather than written with a separator.
       - name: First run against an empty data home
         shell: pwsh
         env:
-          LINKEDIN_MCP_HOME: ${{ runner.temp }}\linkedin-mcp-cleanroom
+          LINKEDIN_MCP_HOME: ${{ runner.temp }}/linkedin-mcp-cleanroom
         run: |
           if (Test-Path $env:LINKEDIN_MCP_HOME) { Remove-Item -Recurse -Force $env:LINKEDIN_MCP_HOME }
 
@@ -101,6 +117,6 @@ jobs:
           if (-not $out) { throw 'server produced no response' }
           Write-Host $out
 
-          $dbPath = Join-Path $env:LINKEDIN_MCP_HOME 'data\linkedin.sqlite3'
+          $dbPath = Join-Path (Join-Path $env:LINKEDIN_MCP_HOME 'data') 'linkedin.sqlite3'
           if (-not (Test-Path $dbPath)) { throw "no database created at $dbPath" }
           Write-Host "created $dbPath"

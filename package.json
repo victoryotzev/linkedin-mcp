@@ -30,7 +30,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "setup:mcp": "powershell -NoProfile -ExecutionPolicy Bypass -File ./setup-mcp.ps1",
+    "setup:mcp": "node scripts/setup-mcp.mjs",
     "control": "tsx scripts/control.ts",
     "notices": "tsx scripts/gen-third-party-notices.ts",
     "mcp:build": "npm run build -w @linkedin-mcp/server",

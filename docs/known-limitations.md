@@ -5,9 +5,12 @@ built yet. Each says which.
 
 ## Platform and access
 
-- **Windows only.** *By construction.* Evidence import accepts drive-letter
-  paths only and the credential vault is Windows DPAPI. See
-  [compatibility.md](compatibility.md).
+- **Windows and Linux only.** *By construction.* macOS has no vault
+  implementation and is untested. On Linux the vault derives its key from
+  `/etc/machine-id`, which is world-readable, so a local process can derive it
+  too — weaker than DPAPI in that one respect. The interactive setup assistant
+  is PowerShell and therefore Windows-only; Linux setup is one JSON block by
+  hand. See [compatibility.md](compatibility.md).
 - **The LinkedIn read lane needs an EEA or Switzerland member.** *LinkedIn's
   limit, not ours.* Member Data Portability tokens are issued to nobody else.
   Everything that does not touch LinkedIn works regardless of where you are.

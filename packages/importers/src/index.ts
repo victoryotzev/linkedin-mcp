@@ -1,9 +1,12 @@
 export { extractDocxText, type DocxExtractResult } from './docx.ts';
 export {
+  assertAcceptableShape,
   assertContained,
   canonicalizePath,
+  hostPathPlatform,
   isContainedIn,
   isReparsePoint,
+  type PathPlatform,
 } from './pathGuard.ts';
 export { redactSecrets, type RedactionFinding, type RedactionResult } from './redaction.ts';
 export { DEFAULT_CSV_LIMITS, parseCsv, type CsvLimits } from './csv.ts';

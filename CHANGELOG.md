@@ -36,6 +36,36 @@ the tree changed; only the commits below it are absent.
   spent on another.
 - **Dashboard upload.** `POST /api/intake/upload`, dashboard-only: an agent
   already has filesystem access and should pass a path.
+- **Linux support.** Both platforms now run the full suite on every push.
+  Three things needed real implementations rather than relaxed checks:
+
+  - **Path admission** applies one of two rule sets. Windows keeps drive
+    letters, and its refusals of UNC paths, device prefixes, alternate data
+    streams and reserved device names. Linux requires a `/` root and refuses
+    embedded NUL bytes and the ambiguous `//` root. Containment comparison is
+    case-insensitive on Windows and case-sensitive on Linux, because there
+    `/data/Evidence` and `/data/evidence` are two directories and folding them
+    together would report containment that does not exist.
+  - **The credential vault** gained a second implementation. Linux has no DPAPI
+    and no equivalent that works without a passphrase somebody would have to
+    type every time an MCP client starts the server, so the sealing key is
+    derived from the host machine id and the calling user id and never written
+    down. A data home copied to another machine or account still cannot be
+    opened. It is weaker than DPAPI in one respect, stated in SECURITY.md
+    rather than glossed: `/etc/machine-id` is world-readable, so a local
+    process can derive the same key.
+  - **The data home** follows the XDG Base Directory specification on Linux —
+    `$XDG_DATA_HOME/linkedin-mcp`, else `~/.local/share/linkedin-mcp` — and
+    stays under `%LOCALAPPDATA%` on Windows.
+
+  None of it is tested only on its own platform: the path rules, the data-home
+  defaults and the whole non-DPAPI vault take the platform as an argument, so
+  the Windows rules are exercised on the Linux runner and the reverse. What
+  stays Windows-only is the DPAPI half of the vault, which needs real
+  PowerShell, and the setup assistant, which is PowerShell — `npm run setup:mcp`
+  now prints the manual configuration on other platforms instead of failing
+  with `ENOENT`. macOS remains unsupported: most of it would run, the vault has
+  no implementation, and nothing is tested.
 
 - `LICENSE` (MIT), `NOTICE`, and a generated `THIRD-PARTY-NOTICES.md`, plus an
   `npm run notices` script that regenerates the latter from `package-lock.json`.
@@ -61,10 +91,9 @@ the tree changed; only the commits below it are absent.
   stdio server and needs `dist/` to exist. A fresh clone that followed the old
   order got a red suite for that reason alone.
 - **Platform support stated honestly.** The README implied the server was
-  broadly portable. Evidence import accepts drive-letter paths only and the
-  credential vault requires Windows DPAPI, so Windows is now documented as the
-  only supported platform, and the LinkedIn read lane's EEA/Switzerland
-  restriction is stated where it matters.
+  broadly portable when it was not, and the LinkedIn read lane's
+  EEA/Switzerland restriction is now stated where it matters. Windows and Linux
+  are both supported as of the entry below; macOS still is not.
 - `scripts/dma-sync.ts` and `scripts/dev-migrate.ts` now resolve the data home
   through `resolveDataHome()` instead of reading the environment directly.
   **This is stricter:** a relative `LINKEDIN_MCP_HOME`, or one pointing at a

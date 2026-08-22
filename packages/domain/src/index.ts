@@ -108,7 +108,25 @@ export {
   type UnresolvedReason,
 } from './profileFreshnessService.ts';
 export { probeLane, type ProbeResult } from './laneProbe.ts';
-export { SECRET_NAMES, createSecretStore, type SecretStore } from './secretStore.ts';
+export {
+  SECRET_NAMES,
+  createSecretStore,
+  dpapiKeyWrapper,
+  hostKeyWrapper,
+  machineKeyWrapper,
+  masterKeyFileName,
+  type KeyWrapper,
+  type SecretStore,
+  type SecretStoreOptions,
+} from './secretStore.ts';
+export {
+  MACHINE_ID_PATHS,
+  deriveKeyEncryptionKey,
+  readMachineId,
+  unwrapWithMachineKey,
+  wrapWithMachineKey,
+  type MachineIdentity,
+} from './machineKey.ts';
 export {
   configureLane,
   disablePublishing,

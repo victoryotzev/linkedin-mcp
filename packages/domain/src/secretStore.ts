@@ -1,9 +1,17 @@
 import { spawn } from 'node:child_process';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { withWriteTx, type Row, type SqliteDriver } from '@linkedin-mcp/db';
 import { DomainError } from '@linkedin-mcp/shared';
+import {
+  deriveKeyEncryptionKey,
+  readMachineId,
+  unwrapWithMachineKey,
+  wrapWithMachineKey,
+  type MachineIdentity,
+} from './machineKey.ts';
 
 // Windows DPAPI (CurrentUser) is the only trust anchor here, and it is worth
 // being exact about what that buys. The OS wraps our master key with material
@@ -41,7 +49,13 @@ export const SECRET_NAMES = {
 // vault, not a general key-value store that other code can grow into.
 const STORABLE_NAMES: readonly string[] = Object.values(SECRET_NAMES);
 
-const MASTER_KEY_FILE = 'master.key.dpapi';
+// One file name per wrapping scheme, deliberately. A secrets folder carried
+// between platforms then fails by not being found — the vault starts fresh and
+// says so — rather than by handing DPAPI a blob it will reject with a message
+// about corruption. The Windows name is unchanged, so existing installs keep
+// their key.
+const MASTER_KEY_FILE_DPAPI = 'master.key.dpapi';
+const MASTER_KEY_FILE_MACHINE = 'master.key.mkey';
 
 // The unwrapped envelope is [version:1][key_id:8][aes-256 key:32]. The key id
 // is random and travels *inside* the wrapped blob rather than being derived
@@ -181,10 +195,72 @@ function parseEnvelope(bytes: Buffer, keyPath: string): MasterKey {
   };
 }
 
-async function resolveMasterKey(keyPath: string): Promise<MasterKey> {
+/**
+ * How the master-key envelope is sealed on this host.
+ *
+ * Windows hands it to DPAPI. Everywhere else it is sealed under a key derived
+ * from the machine id and the calling user — see machineKey.ts for why that is
+ * the shape, and for the one property it gives up relative to DPAPI.
+ *
+ * The envelope either side handles is identical, so the only thing that varies
+ * between platforms is the seal. Nothing downstream of `parseEnvelope` knows
+ * which one ran.
+ */
+export interface KeyWrapper {
+  /** One name per scheme, so a folder carried between platforms is simply not found. */
+  readonly fileName: string;
+  wrap(envelope: Buffer, keyPath: string): Promise<string>;
+  unwrap(stored: string, keyPath: string): Promise<Buffer>;
+}
+
+export function dpapiKeyWrapper(): KeyWrapper {
+  return {
+    fileName: MASTER_KEY_FILE_DPAPI,
+    // The file holds base64, not the raw DPAPI blob: it is what crosses stdin
+    // on the way back in, and a text file survives being opened by a curious
+    // editor.
+    wrap: async (envelope, keyPath) =>
+      (await dpapi('Protect', envelope.toString('base64'), keyPath)).toString('base64'),
+    unwrap: async (stored, keyPath) => await dpapi('Unprotect', stored, keyPath),
+  };
+}
+
+export function machineKeyWrapper(identity: MachineIdentity): KeyWrapper {
+  // Derived once per wrapper. It is not written anywhere, and it is recomputed
+  // from scratch in the next process.
+  const kek = deriveKeyEncryptionKey(identity);
+  return {
+    fileName: MASTER_KEY_FILE_MACHINE,
+    wrap: (envelope) => Promise.resolve(wrapWithMachineKey(envelope, kek).toString('base64')),
+    unwrap: (stored, keyPath) =>
+      Promise.resolve(unwrapWithMachineKey(Buffer.from(stored, 'base64'), kek, keyPath)),
+  };
+}
+
+/** The file name alone, which is knowable without building a wrapper or reading a machine id. */
+export function masterKeyFileName(platform: string = process.platform): string {
+  return platform === 'win32' ? MASTER_KEY_FILE_DPAPI : MASTER_KEY_FILE_MACHINE;
+}
+
+export function hostKeyWrapper(platform: string = process.platform): KeyWrapper {
+  if (platform === 'win32') return dpapiKeyWrapper();
+  if (platform === 'linux') {
+    return machineKeyWrapper({ machineId: readMachineId(), uid: userInfo().uid });
+  }
+  // Named rather than assumed. macOS has no machine-id file and its keychain is
+  // a different mechanism again; guessing here would produce a vault whose
+  // guarantees nobody has stated.
+  throw new DomainError(
+    'INTERNAL',
+    `the credential vault has no key protection for ${platform}; LinkedIn credentials cannot be stored on this platform, and the rest of the product works without them`,
+    { blockers: ['vault_unsupported_platform'] },
+  );
+}
+
+async function resolveMasterKey(keyPath: string, wrapper: KeyWrapper): Promise<MasterKey> {
   if (existsSync(keyPath)) {
-    const wrapped = readFileSync(keyPath, 'utf8').trim();
-    return parseEnvelope(await dpapi('Unprotect', wrapped, keyPath), keyPath);
+    const stored = readFileSync(keyPath, 'utf8').trim();
+    return parseEnvelope(await wrapper.unwrap(stored, keyPath), keyPath);
   }
   mkdirSync(dirname(keyPath), { recursive: true });
   const envelope = Buffer.concat([
@@ -192,18 +268,17 @@ async function resolveMasterKey(keyPath: string): Promise<MasterKey> {
     randomBytes(KEY_ID_BYTES),
     randomBytes(AES_KEY_BYTES),
   ]);
-  // The file holds base64, not the raw DPAPI blob: it is what crosses stdin on
-  // the way back in, and a text file survives being opened by a curious editor.
-  const wrapped = (await dpapi('Protect', envelope.toString('base64'), keyPath)).toString('base64');
+  const wrapped = await wrapper.wrap(envelope, keyPath);
   try {
-    // 'wx': if another process created the key during our ~200ms in
-    // PowerShell, its key is the authoritative one — clobbering it would
-    // strand every row that process already encrypted.
+    // 'wx': if another process created the key while this one was sealing its
+    // own, that process's key is the authoritative one — clobbering it would
+    // strand every row it has already encrypted. The window is ~200ms on
+    // Windows, where sealing spawns PowerShell, and microseconds elsewhere.
     writeFileSync(keyPath, wrapped, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
     const winner = readFileSync(keyPath, 'utf8').trim();
-    return parseEnvelope(await dpapi('Unprotect', winner, keyPath), keyPath);
+    return parseEnvelope(await wrapper.unwrap(winner, keyPath), keyPath);
   }
   return parseEnvelope(envelope, keyPath);
 }
@@ -227,18 +302,35 @@ function blobColumn(row: Row, column: string, name: string): Buffer {
   return Buffer.from(value);
 }
 
-export function createSecretStore(db: SqliteDriver, home: string): SecretStore {
-  const keyPath = join(home, 'secrets', MASTER_KEY_FILE);
+export interface SecretStoreOptions {
+  /** Injectable so both wrapping schemes can be exercised on either platform. */
+  wrapper?: KeyWrapper;
+  platform?: string;
+}
+
+export function createSecretStore(
+  db: SqliteDriver,
+  home: string,
+  options: SecretStoreOptions = {},
+): SecretStore {
+  const platform = options.platform ?? process.platform;
+  const keyPath = join(home, 'secrets', options.wrapper?.fileName ?? masterKeyFileName(platform));
 
   // One PowerShell round trip per process rather than per operation: spawning
   // the interpreter costs ~200ms, and the dashboard pastes a client id and a
   // token together. `pending` collapses callers that arrive during that spawn.
   let cached: MasterKey | null = null;
   let pending: Promise<MasterKey> | null = null;
+  let wrapper: KeyWrapper | null = options.wrapper ?? null;
 
   async function masterKey(): Promise<MasterKey> {
     if (cached !== null) return cached;
-    pending ??= resolveMasterKey(keyPath);
+    // Built on first use rather than at construction. A host where the vault
+    // cannot work — no machine id, an unsupported platform — must still run
+    // everything that does not need a credential, and constructing the store
+    // is not asking for one.
+    if (wrapper === null) wrapper = hostKeyWrapper(platform);
+    pending ??= resolveMasterKey(keyPath, wrapper);
     try {
       cached = await pending;
       return cached;

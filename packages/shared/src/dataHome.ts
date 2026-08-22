@@ -1,9 +1,16 @@
-import { isAbsolute, join, normalize, parse } from 'node:path';
+import { posix as posixPath, win32 as win32Path } from 'node:path';
 
 export interface DataHomeEnvironment {
   LINKEDIN_MCP_HOME?: string;
+  /** Windows. */
   LOCALAPPDATA?: string;
+  /** Linux, per the XDG Base Directory specification. */
+  XDG_DATA_HOME?: string;
+  HOME?: string;
 }
+
+/** The application directory name, under whichever base the platform uses. */
+const APPLICATION_DIRECTORY = 'linkedin-mcp';
 
 /**
  * Resolves the one application home used by the MCP server, dashboard, and
@@ -12,28 +19,63 @@ export interface DataHomeEnvironment {
  * A configured home must be absolute. Accepting a relative value would make
  * two MCP hosts with different working directories open different databases
  * while both appeared to use the same configuration.
+ *
+ * `platform` is a parameter rather than a read of `process.platform` so both
+ * defaults can be tested from either host. The path rules differ between them
+ * — `C:\x` is not absolute to POSIX and `/x` is absolute to Windows — so a test
+ * that could only run on its own platform would prove the wrong thing.
  */
-export function resolveDataHome(env: DataHomeEnvironment = process.env): string {
+export function resolveDataHome(
+  env: DataHomeEnvironment = process.env,
+  platform: string = process.platform,
+): string {
   const configured = env.LINKEDIN_MCP_HOME?.trim();
-  if (configured) return normalizeAbsolute(configured, 'LINKEDIN_MCP_HOME');
+  if (configured) return normalizeAbsolute(configured, 'LINKEDIN_MCP_HOME', platform);
 
-  const localAppData = env.LOCALAPPDATA?.trim();
-  if (!localAppData) {
-    throw new Error(
-      'Neither LINKEDIN_MCP_HOME nor LOCALAPPDATA is set; cannot locate the LinkedIn app data directory',
+  if (platform === 'win32') {
+    const localAppData = env.LOCALAPPDATA?.trim();
+    if (!localAppData) {
+      throw new Error(
+        'Neither LINKEDIN_MCP_HOME nor LOCALAPPDATA is set; cannot locate the LinkedIn app data directory',
+      );
+    }
+    return normalizeAbsolute(
+      win32Path.join(localAppData, APPLICATION_DIRECTORY),
+      'LOCALAPPDATA',
+      platform,
     );
   }
-  return normalizeAbsolute(join(localAppData, 'linkedin-mcp'), 'LOCALAPPDATA');
+
+  // XDG first, then the location the specification says to assume when it is
+  // unset. Both are honoured rather than only one, because a member who has set
+  // XDG_DATA_HOME has said where application data goes and this is application
+  // data.
+  const xdg = env.XDG_DATA_HOME?.trim();
+  if (xdg) {
+    return normalizeAbsolute(posixPath.join(xdg, APPLICATION_DIRECTORY), 'XDG_DATA_HOME', platform);
+  }
+  const home = env.HOME?.trim();
+  if (!home) {
+    throw new Error(
+      'None of LINKEDIN_MCP_HOME, XDG_DATA_HOME or HOME is set; cannot locate the LinkedIn app data directory',
+    );
+  }
+  return normalizeAbsolute(
+    posixPath.join(home, '.local', 'share', APPLICATION_DIRECTORY),
+    'HOME',
+    platform,
+  );
 }
 
-function normalizeAbsolute(value: string, variable: string): string {
-  if (!isAbsolute(value)) {
+function normalizeAbsolute(value: string, variable: string, platform: string): string {
+  const path = platform === 'win32' ? win32Path : posixPath;
+  if (!path.isAbsolute(value)) {
     throw new Error(
       `${variable} must be an absolute path so every MCP client and the dashboard open the same data`,
     );
   }
-  const normalized = normalize(value);
-  const root = parse(normalized).root;
+  const normalized = path.normalize(value);
+  const root = path.parse(normalized).root;
   if (normalized === root) {
     throw new Error(
       `${variable} cannot be a filesystem root; choose a dedicated application folder`,

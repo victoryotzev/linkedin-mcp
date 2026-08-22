@@ -2,10 +2,11 @@
 
 The MCP server is the primary workflow engine of the LinkedIn app. It is a local stdio process and runs independently of the optional dashboard, which is a synchronized visual support surface.
 
-**Supported platform: Windows 10 or later.** Evidence import accepts
-drive-letter paths only and the credential vault is Windows DPAPI via Windows
-PowerShell 5.1, so Linux and macOS are untested and unsupported. The optional
-LinkedIn read lane is limited further: LinkedIn issues Member Data Portability
+**Supported platforms: Windows 10 or later, and Linux.** Both run the full
+test suite on every push. Evidence import accepts each platform's own
+absolute-path shape, and the credential vault uses DPAPI on Windows and a key
+derived from the machine id on Linux. macOS is untested and unsupported. The
+optional LinkedIn read lane is limited further: LinkedIn issues Member Data Portability
 tokens only to members located in the European Economic Area or Switzerland.
 
 ## Build and verify
@@ -33,6 +34,12 @@ npm run mcp:dev
 ```
 
 ## Interactive setup assistant
+
+**Windows only.** It is PowerShell, and what it does is write the client
+configuration files listed below on your behalf. On Linux, do the same thing by
+hand: every client section further down shows the exact block, and the generic
+three-field form is under [Other stdio MCP clients](#other-stdio-mcp-clients).
+Nothing else about running the server differs between the platforms.
 
 From the repository root, the easiest installation is:
 
@@ -68,13 +75,26 @@ Restart selected clients after setup. Run the assistant again whenever the repos
 
 ## One configuration, many clients
 
-Use absolute paths. The examples below assume:
+Use absolute paths. The examples below are written with Windows paths:
 
 ```text
 Node:   C:\Program Files\nodejs\node.exe
 Server: C:\path\to\LinkedIn\linkedin-mcp-server\dist\index.js
 Home:   C:\Users\YOUR_NAME\AppData\Local\linkedin-mcp
 ```
+
+On Linux the shape of every example is identical and only the paths change:
+
+```text
+Node:   /usr/bin/node                         (`command -v node`)
+Server: /path/to/LinkedIn/linkedin-mcp-server/dist/index.js
+Home:   /home/YOUR_NAME/.local/share/linkedin-mcp
+```
+
+That home is the default on Linux — `$XDG_DATA_HOME/linkedin-mcp` when
+`XDG_DATA_HOME` is set, otherwise `~/.local/share/linkedin-mcp`. On Windows the
+default is under `%LOCALAPPDATA%`. Setting `LINKEDIN_MCP_HOME` explicitly
+overrides both.
 
 Replace those values with your paths. `LINKEDIN_MCP_HOME` is optional, but setting the same absolute value ensures every client and the dashboard use the same database, artifacts, decisions, drafts, settings, and encrypted credential vault. The assistant above does this automatically.
 
@@ -211,7 +231,7 @@ Refresh installed MCP servers in the UI, or run `/mcp` in Antigravity CLI. [Offi
 
 ### Other stdio MCP clients
 
-Use the same three fields supported by most clients:
+Use the same three fields supported by most clients. Windows:
 
 ```json
 {
@@ -219,6 +239,18 @@ Use the same three fields supported by most clients:
   "args": ["C:\\absolute\\path\\to\\linkedin-mcp-server\\dist\\index.js"],
   "env": {
     "LINKEDIN_MCP_HOME": "C:\\absolute\\path\\to\\linkedin-mcp-data"
+  }
+}
+```
+
+Linux — the same three fields, and the whole of manual setup there:
+
+```json
+{
+  "command": "/usr/bin/node",
+  "args": ["/absolute/path/to/linkedin-mcp-server/dist/index.js"],
+  "env": {
+    "LINKEDIN_MCP_HOME": "/home/YOUR_NAME/.local/share/linkedin-mcp"
   }
 }
 ```

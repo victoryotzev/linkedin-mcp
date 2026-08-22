@@ -30,16 +30,34 @@ External LinkedIn features are optional. They remain unavailable until the corre
 
 ## Requirements
 
-- **Windows 10 or later.** This is the only supported platform.
+- **Windows 10 or later, or Linux.** Both are supported and both run the full
+  test suite on every push.
 - Node.js 24 or later (the database uses the built-in `node:sqlite`)
 - npm
 
-Windows is not a preference, it is where the product works. Evidence import
-accepts drive-letter paths only, so no evidence source can be registered on
-Linux or macOS, and the encrypted credential vault is Windows DPAPI via Windows
-PowerShell 5.1. The database and the MCP transport themselves run anywhere Node
-24 does, but the two pipelines that make this useful do not. Non-Windows is
-untested and unsupported.
+Evidence import accepts each platform's own absolute-path shape: drive-letter
+paths on Windows, `/`-rooted paths on Linux. The rules genuinely differ —
+Windows also refuses UNC paths, alternate data streams and reserved device
+names, while Linux refuses embedded NUL bytes and compares paths
+case-sensitively — because the dangerous shapes differ, not because one
+platform is trusted more.
+
+The credential vault differs too, and the difference is worth knowing before
+you rely on it. Windows seals the master key with DPAPI. Linux has no
+equivalent that works without a passphrase you would have to type every time an
+MCP client starts the server, so the key is **derived** instead, from the
+host's machine id and your user id, and never written down. Both give the same
+practical guarantee — a data home copied to another machine or another account
+cannot be opened — but on Linux the machine id is world-readable, so any
+process on that box can derive the same key. Neither defends against software
+running as you; see [SECURITY.md](SECURITY.md).
+
+macOS is **not** supported. Much of the product would run, but the vault has no
+implementation there and nothing is tested on it.
+
+The interactive setup assistant is Windows-only. On Linux you configure your
+MCP client by hand, which is one JSON block — see
+[MCP server setup](linkedin-mcp-server/README.md).
 
 The optional LinkedIn read lane has a second, separate limit: LinkedIn issues
 Member Data Portability tokens only to members located in the European Economic
