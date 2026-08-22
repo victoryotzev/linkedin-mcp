@@ -7,9 +7,18 @@ export default defineConfig({
   // Browser-side tests are .tsx and compile against the same JSX runtime the
   // bundler uses, so a component that typechecks here is the component that
   // ships. Server tests are unaffected — they contain no JSX.
-  esbuild: {
-    jsx: 'automatic',
-    jsxImportSource: 'hono/jsx/dom',
+  //
+  // Configured under `oxc`, not `esbuild`. Vitest 4 brought Vite 8, which
+  // transforms with oxc and marks `esbuild` deprecated — the block was still
+  // accepted and silently ignored, so `importSource` fell back to its default
+  // of 'react' and all 32 .tsx suites failed to resolve `react/jsx-dev-runtime`.
+  // There is no plain tsconfig.json at the root for oxc to read this from
+  // either, so it has to be stated here.
+  oxc: {
+    jsx: {
+      runtime: 'automatic',
+      importSource: 'hono/jsx/dom',
+    },
   },
   resolve: {
     alias: {
@@ -56,7 +65,9 @@ export default defineConfig({
         // Verified by hand: 278 declarations, zero runtime statements.
         'linkedin-dashboard/src/client/lib/types.ts',
       ],
-      all: true,
+      // No `all: true`. Vitest 4 removed it: `include` now decides on its own
+      // which files are reported, covered or not, so a file nothing imports
+      // still counts against the total rather than quietly vanishing from it.
     },
   },
 });
