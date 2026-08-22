@@ -12,6 +12,17 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     labels: [dependencies]
+    ignore:
+      # @types/node majors track the Node major they describe, and this project
+      # supports node >=24 - the same version CI runs and .nvmrc pins. Typing
+      # against 26 would let code compile against APIs that do not exist on the
+      # runtime the product actually supports, and the failure would appear at
+      # run time on a supported configuration rather than here.
+      #
+      # This is pinned to the engines floor, not to a preference. Raise the
+      # floor first, then let this bump follow it.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
