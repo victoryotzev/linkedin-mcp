@@ -93,6 +93,16 @@ the tree changed; only the commits below it are absent.
 
 ### Fixed
 
+- **Backups left the artifacts out, and wrote them beside the archive.** When
+  the data home's path was not its own canonical path — an 8.3 alias such as
+  `PROGRA~1`, a long account name, any folder with a space, a junction — the
+  artifact copies were written to a directory next to the backup instead of
+  inside it, the manifest recorded them under paths that climbed out of the
+  archive, and `verifyBackup` then correctly refused the result as unsafe. A
+  backup is what unlocks the full purge, so on such a machine the purge stayed
+  locked and the archive did not hold the evidence it claimed to. The paths a
+  backup measures against are now canonicalised, and a containment check
+  refuses any destination outside the backup directory.
 - **A first run reached Overview instead of Setup.** Spending the single-use
   launch token rewrote the URL fragment to `#/overview`, and the shell reads an
   explicit fragment as the member having asked for somewhere specific — so the
