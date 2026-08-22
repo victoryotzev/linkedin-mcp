@@ -19,7 +19,7 @@ traced end to end is written as a limitation rather than a guarantee.
 | A6 | Approvals | `approvals` table | Publishing text the member never approved |
 | A7 | Evidence source roots | Member-designated filesystem paths | Arbitrary local file read within a registered root |
 | A8 | Dashboard session | In memory, per process | Full human-authority surface |
-| A9 | MCP client configuration | Six global AI-client files | Substituting the MCP server binary |
+| A9 | MCP client configuration | Seven global AI-client files | Substituting the MCP server binary |
 
 ## Adversaries in scope
 
@@ -60,7 +60,7 @@ cannot fabricate from context — `ENABLE <source_id>`, `APPROVE <approval_id>
 to the exact revision hash of the draft being approved, and the hash must match
 the byte-exact preview (`linkedin-mcp-server/src/tools/publish.ts:249-262`).
 Real publishing is gated a second time by a feature flag that defaults off
-(`packages/domain/src/featureControlService.ts:70-73`) and a third time by a
+(`packages/domain/src/featureControlService.ts:78-82`) and a third time by a
 verified write lane. **Secret entry is structurally unreachable from this
 channel** — the vault name allowlist has no path in
 (`packages/domain/src/secretStore.ts:66,399-405`).
@@ -108,9 +108,11 @@ timeout and a 16 MB output cap, with `enableScripting: false` — the default is
 ZIP entries pass through the same path guard as B3.
 
 *Residual:* the child process bounds crashes and hangs. It does **not** bound
-code execution: the child runs as the member, with the data directory and DPAPI
-Unprotect within reach. That is why `enableScripting: false` carries the weight
-here, not the process isolation.
+code execution: the child runs as the member, with the data directory and the
+vault's unwrap within reach (DPAPI Unprotect on Windows, the Keychain item on
+macOS, the machine-id derivation on Linux — all available to any process running
+as the member). That is why `enableScripting: false` carries the weight here,
+not the process isolation.
 
 ### B5 — Dashboard network boundary
 
@@ -220,7 +222,7 @@ effect calls `requireIntactChain` first (`:246-255`).
 *Threat:* credentials leaking into a backup; unrecoverable deletion by accident.
 
 *Controls:* backup verification rejects any archive containing a `secrets/`
-entry (`packages/domain/src/backupService.ts:294-295`). Full purge requires the
+entry (`packages/domain/src/backupService.ts:329-332`). Full purge requires the
 exact phrase and is a deliberate crypto-erase; the consequences are spelled out
 in [privacy-and-local-data.md](privacy-and-local-data.md).
 

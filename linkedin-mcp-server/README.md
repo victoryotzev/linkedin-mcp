@@ -424,13 +424,14 @@ Default home:
 Important contents:
 
 ```text
-data\linkedin.sqlite3   SQLite database and WAL
-artifacts\              Content-addressed imported copies
-backups\                Verified application backups
-secrets\                DPAPI-wrapped master key
+data/linkedin.sqlite3   SQLite database and WAL
+artifacts/              Content-addressed imported copies
+backups/                Verified application backups
+secrets/                Sealed master key: master.key.dpapi (Windows),
+                        master.key.keychain (macOS), or master.key.mkey (Linux)
 ```
 
-All durable application configuration is in the same SQLite database. Secret values are encrypted there and can be used by either the dashboard or an MCP external-capability tool through the same DPAPI key, while never being returned to the agent. The AI-client files contain only the server command and shared home path.
+All durable application configuration is in the same SQLite database. Secret values are encrypted there and can be used by either the dashboard or an MCP external-capability tool through the same sealed master key — wrapped by DPAPI on Windows, the login Keychain on macOS, or a machine-id-derived key on Linux — while never being returned to the agent. The AI-client files contain only the server command and shared home path.
 
 Multiple clients may open separate stdio processes against this home. SQLite WAL mode, immediate write transactions, and bounded busy retries keep committed progress consistent across them and the dashboard. The dashboard refreshes visible data after MCP-side changes.
 

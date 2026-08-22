@@ -30,6 +30,5 @@ These are things this project genuinely cannot help with:
   only to members in the European Economic Area or Switzerland. That is not
   something this project can work around, and it will not grow a workaround —
   see [docs/known-limitations.md](docs/known-limitations.md).
-- **Non-Windows support.** See [docs/compatibility.md](docs/compatibility.md).
 - **Advice on what to post.** This tool checks whether a draft is backed by
   evidence you supplied. It has no opinion on strategy, and it contains no LLM.

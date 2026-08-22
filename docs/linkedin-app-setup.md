@@ -78,9 +78,10 @@ The agent will not enter a token into any field. The flow is:
    can be removed afterwards in app settings.
 3. Copy the token, open the dashboard (`npm run dashboard`) → **Analytics &
    system** → **Credentials**, paste the client ID and token into the matching
-   lane, and press **Save encrypted**. The value is encrypted with a Windows
-   DPAPI-wrapped key before it reaches the database and is never returned by any
-   read path.
+   lane, and press **Save encrypted**. The value is encrypted before it reaches the
+   database, under a master key sealed by the platform's OS facility (DPAPI on
+   Windows, the login Keychain on macOS, a machine-id-derived key on Linux), and
+   is never returned by any read path.
 4. Press **Verify against LinkedIn**. The read lane is proved with a real DMA
    snapshot read (the read app has no OIDC product, so `/v2/userinfo` would 403
    there); the write lane is proved with `/v2/userinfo`, which also yields the

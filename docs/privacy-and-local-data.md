@@ -5,7 +5,7 @@ to get rid of it.
 
 ## The short version
 
-Everything lives in one directory on one Windows account. The only outbound
+Everything lives in one directory under one user account. The only outbound
 network destination anywhere in the codebase is `https://api.linkedin.com`, and
 it is contacted only when you or an agent invoke a tool that contacts it. There
 is no telemetry, no analytics, no crash reporting, no account system, and no
@@ -13,19 +13,23 @@ hosted component.
 
 ## Where the data lives
 
-The default home is `%LOCALAPPDATA%\linkedin-mcp`. Override it with an absolute
-`LINKEDIN_MCP_HOME` (`packages/shared/src/dataHome.ts:16-40`); relative values
-and filesystem roots are rejected on purpose, because two MCP clients started
-from different working directories would otherwise open two different databases
-while appearing to share one configuration.
+The default home follows each platform's convention: `%LOCALAPPDATA%\linkedin-mcp`
+on Windows, `~/Library/Application Support/linkedin-mcp` on macOS, and
+`$XDG_DATA_HOME/linkedin-mcp` (or `~/.local/share/linkedin-mcp`) on Linux.
+Override it with an absolute `LINKEDIN_MCP_HOME`
+(`packages/shared/src/dataHome.ts:28-72`); relative values, filesystem roots,
+and — on Windows — drive-relative paths are rejected on purpose, because two MCP
+clients started from different working directories (or different drives) would
+otherwise open two different databases while appearing to share one
+configuration.
 
 | Path | Contents |
 |---|---|
-| `data\linkedin.sqlite3` (+ `-wal`, `-shm`) | Evidence records, claims, conflicts, canonical profile revisions, drafts and their revisions, approvals, publication history, analytics, settings, the audit chain, and encrypted credential rows |
-| `artifacts\` | Content-addressed copies of everything you imported, plus extracted text |
-| `backups\` | Verified backups you asked for |
-| `secrets\master.key.dpapi` | The DPAPI-wrapped master key (mode `0o600`) |
-| `logs\` | Diagnostics, when written |
+| `data/linkedin.sqlite3` (+ `-wal`, `-shm`) | Evidence records, claims, conflicts, canonical profile revisions, drafts and their revisions, approvals, publication history, analytics, settings, the audit chain, and encrypted credential rows |
+| `artifacts/` | Content-addressed copies of everything you imported, plus extracted text |
+| `backups/` | Verified backups you asked for |
+| `secrets/` — the sealed master key: `master.key.dpapi` on Windows, `master.key.keychain` on macOS, `master.key.mkey` on Linux (mode `0o600`) | The master key, wrapped by the platform's OS facility (DPAPI, the login Keychain, or a machine-id-derived key) |
+| `logs/` | Diagnostics, when written |
 
 **The repository checkout holds none of this.** Do not point
 `LINKEDIN_MCP_HOME` inside a clone, and do not put it in OneDrive, Dropbox, or
@@ -50,11 +54,13 @@ repository.
 
 ## What never leaves, and what never reaches the model
 
-- **Credentials.** Tokens are encrypted at rest with AES-256-GCM under a
-  DPAPI-wrapped key. No read path returns a stored token value. They are never
+- **Credentials.** Tokens are encrypted at rest with AES-256-GCM under a master
+  key that is sealed by the platform's OS facility — DPAPI on Windows, the login
+  Keychain on macOS, a machine-id-derived key on Linux. No read path returns a
+  stored token value. They are never
   written into an AI-client configuration file, never placed in command
   arguments, never included in an export, and never included in a backup
-  (`packages/domain/src/backupService.ts:294-295`).
+  (`packages/domain/src/backupService.ts:329-332`).
 - **Secrets found inside your own evidence.** Imported text is scrubbed at
   ingest — PEM private keys, GitHub/Slack/AWS tokens, JWTs, `KEY=value`
   credential assignments, and high-entropy strings are replaced with a
@@ -99,11 +105,12 @@ verified against it. Remove those and run it again to finish the job.
 `data`, `artifacts`, `backups`, `logs`, and `secrets`
 (`packages/domain/src/backupService.ts:422-441`).
 
-Deleting `secrets\master.key.dpapi` is what makes it a crypto-erase: any stray
-ciphertext anywhere becomes permanently undecryptable. There is no recovery, no
+Deleting the sealed master key in `secrets/` — `master.key.dpapi` on Windows,
+`master.key.keychain` on macOS, `master.key.mkey` on Linux — is what makes it a
+crypto-erase: any stray ciphertext anywhere becomes permanently undecryptable. There is no recovery, no
 undo, and no support path that can reverse it. If a secret row survives while
 the key is gone, the store reports exactly that rather than pretending
-(`packages/domain/src/secretStore.ts:314-319`).
+(`packages/domain/src/secretStore.ts:458-461`).
 
 ## Your own data, on your own terms
 

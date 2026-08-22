@@ -101,7 +101,7 @@ without touching domain code.
 
 | Lane | Requirement |
 |---|---|
-| Everything not touching LinkedIn | No account, no credential, no network. Works on both supported platforms. |
+| Everything not touching LinkedIn | No account, no credential, no network. Works on all three supported platforms. |
 | Read lane (Member Data Portability) | **A LinkedIn member located in the European Economic Area or Switzerland.** LinkedIn issues `r_dma_portability_self_serve` tokens to nobody else. |
 | Write lane (posting) | A separate developer app with Share on LinkedIn and Sign In with LinkedIn. |
 

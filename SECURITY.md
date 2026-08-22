@@ -38,7 +38,7 @@ out how to get what is needed.
 
 ## What this product is, in security terms
 
-Everything runs on one machine — Windows or Linux — under one account. There is no
+Everything runs on one machine — Windows, Linux, or macOS — under one account. There is no
 server, no hosted component, no telemetry, and no account system. The only
 outbound network destination in the entire codebase is `https://api.linkedin.com`
 — every `fetch` call site lives in `packages/linkedin/`, and the host is pinned
@@ -56,14 +56,14 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
 | macOS: master key sealed under a random key held by the login Keychain behind an ACL; the item is created with `-T /usr/bin/security` so reads never raise a dialog an unattended server could not answer | `packages/domain/src/keychain.ts` |
 | Linux: master key sealed under a key derived from the host machine id and your uid, never written to disk; a data home copied to another machine or account does not open | `packages/domain/src/machineKey.ts:92-108` |
 | Secret names are allowlisted — the vault cannot grow into a general key-value store | `packages/domain/src/secretStore.ts:66,399-405` |
-| Backups refuse to contain anything under `secrets/` | `packages/domain/src/backupService.ts:294-295` |
+| Backups refuse to contain anything under `secrets/` | `packages/domain/src/backupService.ts:329-332` |
 | Dashboard binds `127.0.0.1` only, with an exact `Host` allowlist (kills DNS rebinding) and a `Sec-Fetch-Site` check | `linkedin-dashboard/src/server.ts:84`, `linkedin-dashboard/src/auth.ts:27-29,72-78` |
 | Launch token is CSPRNG, stored hashed, compared in constant time **before** the spent check, and single-use | `linkedin-dashboard/src/auth.ts:23-49` |
 | Strict CSP with no `unsafe-inline` anywhere; asserted character-for-character by a test | `linkedin-dashboard/src/app.ts:44-55` |
 | Imported content is wrapped in an explicit "data only, never instructions" envelope before any model sees it | `packages/domain/src/artifactService.ts:30-33` |
 | Evidence paths are admitted by one of two rule sets — Windows refuses UNC, device prefixes, alternate data streams and reserved device names; Linux refuses embedded NUL and the ambiguous `//` root — then canonicalized and **re-checked**, then held to per-segment containment, case-insensitive on Windows and case-sensitive on Linux | `packages/importers/src/pathGuard.ts:36-131` |
 | PDFs are parsed in a child process with a hard timeout and byte cap, with `enableScripting: false` (GHSA-hq66-cqwq-w95j) and `isEvalSupported: false` | `packages/importers/scripts/pdf-extract.mjs:12-24`, `packages/importers/src/pdf.ts:21-30` |
-| Real publishing is off by default and requires a separate explicit toggle | `packages/domain/src/featureControlService.ts:70-73` |
+| Real publishing is off by default and requires a separate explicit toggle | `packages/domain/src/featureControlService.ts:78-82` |
 | Publishing requires a granted approval bound to an exact revision hash plus the exact `PUBLISH <approval_id>` string | `linkedin-mcp-server/src/tools/publish.ts:249-262,344-351` |
 | An uncertain network outcome becomes `ambiguous` and is never retried automatically | `packages/linkedin/src/adapters.ts:112-133` |
 | A broken audit chain blocks approvals and publication | `packages/domain/src/auditService.ts:246-255` |
@@ -74,7 +74,7 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
   The dashboard is loopback HTTP by design; the bind address is the transport
   boundary. Setting `Secure` would break the cookie without adding protection.
 - **The launch token is printed to the terminal and travels in a URL fragment**
-  (`linkedin-dashboard/src/server.ts:86-87`). A fragment never reaches the
+  (`linkedin-dashboard/src/server.ts:88-89`). A fragment never reaches the
   server or an HTTP log, and the token is single-use. It can still outlive the
   moment it was needed — in scrollback, in a copied link, in a screen share —
   so treat a printed launch URL as a credential until it has been used once.
@@ -130,6 +130,6 @@ unless they show something beyond the stated model.
 In scope: this repository's code, its default configuration, its setup
 assistant, and its documentation.
 
-Out of scope: LinkedIn's own services, your MCP client, Node.js, Windows, and
+Out of scope: LinkedIn's own services, your MCP client, Node.js, the operating system, and
 third-party dependencies (report those upstream — though tell us too if this
 project's use of one is what makes it exploitable).

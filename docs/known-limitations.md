@@ -16,9 +16,10 @@ built yet. Each says which.
 - **The LinkedIn read lane needs an EEA or Switzerland member.** *LinkedIn's
   limit, not ours.* Member Data Portability tokens are issued to nobody else.
   Everything that does not touch LinkedIn works regardless of where you are.
-- **One Windows account, one machine.** *By construction.* DPAPI material is
-  bound to the account that created it. A data home copied elsewhere cannot be
-  decrypted there — that is the point, not a bug.
+- **One account, one machine.** *By construction.* The sealed master key is
+  bound to the account and the host — DPAPI on Windows, a login-Keychain item on
+  macOS, a machine-id-derived key on Linux. A data home copied to another
+  machine or account cannot be decrypted there — that is the point, not a bug.
 
 ## What it will not do, on purpose
 

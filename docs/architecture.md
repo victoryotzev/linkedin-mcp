@@ -8,7 +8,7 @@ that are not obvious from the directory listing.
 ```
              ┌──────────────────────┐        ┌────────────────────────┐
    AI host ──│  linkedin-mcp-server │        │  linkedin-dashboard    │──  browser
-   (stdio)   │  44 tools, 5 res,    │        │  loopback HTTP, 6      │    (127.0.0.1)
+   (stdio)   │  44 tools, 5 res,    │        │  loopback HTTP, 7      │    (127.0.0.1)
              │  5 prompts           │        │  screens + tool console│
              └──────────┬───────────┘        └───────────┬────────────┘
                         │                                │

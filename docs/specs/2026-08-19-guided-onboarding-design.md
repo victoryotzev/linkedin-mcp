@@ -124,9 +124,21 @@ ledger.
 
 ### Migration 019
 
-`sources.trust` carries a CHECK constraint, and SQLite cannot alter one in
-place. Migration 019 rebuilds the table, following the pattern proven by
-migration 016.
+> **As shipped, this section describes a path not taken.** The design below
+> assumed self-attested trust needed a new value on the `sources.trust` CHECK
+> constraint, which cannot be altered in place and would have forced a table
+> rebuild. The implemented migration
+> (`packages/db/src/migrations/019_self_attested_trust.ts`) avoids all of that:
+> it adds a boolean `self_attested` column with a single
+> `ALTER TABLE sources ADD COLUMN`, touches no CHECK constraint, and rebuilds
+> nothing — so no foreign-key handling is involved. The rest of this section is
+> kept for the reasoning that led there. (The rebuild the design planned was
+> also found unworkable in practice: `defer_foreign_keys` does not rescue a
+> parent-table drop here, which is part of why the simpler column add won.)
+
+The original design reasoned as follows. `sources.trust` carries a CHECK
+constraint, and SQLite cannot alter one in place, so adding a trust value would
+have meant rebuilding the table, following the pattern proven by migration 016.
 
 `sources` differs from `audit_events` in one way that matters: it has three FK
 children (`import_runs.source_id`, `artifacts.source_id`, and one in migration
@@ -144,7 +156,7 @@ import_runs, and profile rows — and assert every child row still resolves.
 
 | Area | Test |
 |---|---|
-| Migration 019 | Populated DB with all three FK children survives the rebuild |
+| Migration 019 | Populated DB gains the `self_attested` column (added, not rebuilt) with all rows and FK children intact |
 | Virtual sources | Registration without a path; sentinel uniqueness; path guard never invoked |
 | Direct ingest | Redaction still applied; duplicate detection works; size ceiling enforced |
 | Self-attestation | `self_attested` sources cannot silently back an evidence-backed claim |

@@ -62,7 +62,7 @@ path: backups only ever land inside the managed data home.
 
 Restore that backup, then check out the matching tag. A backup is verified
 before it is trusted, and a verified backup never contains anything under
-`secrets/` (`packages/domain/src/backupService.ts:294-295`), so credentials are
+`secrets/` (`packages/domain/src/backupService.ts:329-332`), so credentials are
 re-entered after a restore rather than travelling with it.
 
 **Take a backup before upgrading** if the data matters. It is the only rollback

@@ -8,7 +8,7 @@ You do not need to start it to use the MCP server.
 
 The dashboard is a view over the same durable application state used by every MCP process. Drafts, revisions, decisions, approvals, profile progress, sources, publication history, settings, and credentials do not belong to a browser session. Closing either surface does not remove them.
 
-Both surfaces can run simultaneously. SQLite WAL mode and bounded write retries coordinate committed changes, while the dashboard refreshes its mounted screen every 15 seconds and immediately when its window regains focus. This is local synchronization for one Windows user; it does not copy the live database to another computer or cloud folder.
+Both surfaces can run simultaneously. SQLite WAL mode and bounded write retries coordinate committed changes, while the dashboard refreshes its mounted screen every 15 seconds and immediately when its window regains focus. This is local synchronization for a single local user; it does not copy the live database to another computer or cloud folder.
 
 To configure supported AI clients with the same home automatically, run from the repository root:
 
@@ -58,7 +58,7 @@ npm run dashboard
 
 Use the same absolute value in your MCP client configuration. Relative values are rejected. The setup assistant writes the chosen absolute value into every selected client and saves it for future dashboard sessions.
 
-The default home is `%LOCALAPPDATA%\linkedin-mcp`. The default port is `4780`; it can be changed through the confirmed `linkedin_settings_set` MCP tool using the `dashboard.port` setting.
+The default home is platform-dependent: `%LOCALAPPDATA%\linkedin-mcp` on Windows, `~/Library/Application Support/linkedin-mcp` on macOS, and `$XDG_DATA_HOME/linkedin-mcp` (or `~/.local/share/linkedin-mcp`) on Linux. `LINKEDIN_MCP_HOME` overrides it on every platform. The default port is `4780`; it can be changed through the confirmed `linkedin_settings_set` MCP tool using the `dashboard.port` setting.
 
 ## What the dashboard provides
 
@@ -82,7 +82,7 @@ The dashboard is especially useful for decisions that should be made by a person
 - verifying or rejecting evidence claims;
 - resolving factual conflicts;
 - reviewing profile patches and marking manual application;
-- storing LinkedIn credentials in the DPAPI-backed vault;
+- storing LinkedIn credentials in the OS-backed credential vault;
 - enabling real publishing after a successful credential probe;
 - granting or denying a single-use publication approval;
 - destructive artifact or full-data purge operations.
@@ -99,7 +99,7 @@ npm run control -- approval preview <approval_id>
 npm run control -- approval grant <approval_id> --revision-hash <hash_from_preview>
 ```
 
-Credential entry remains human-only and outside MCP. Publication decisions can be recorded in the dashboard, control CLI, or by `linkedin_approval_decide` after the connected agent asks for an explicit command bound to the approval ID and revision hash. Once credentials are stored, their ciphertext and DPAPI-wrapped key are part of the shared home, so MCP external-capability tools can use them without receiving or revealing their values.
+Credential entry remains human-only and outside MCP. Publication decisions can be recorded in the dashboard, control CLI, or by `linkedin_approval_decide` after the connected agent asks for an explicit command bound to the approval ID and revision hash. Once credentials are stored, their ciphertext and OS-wrapped master key are part of the shared home, so MCP external-capability tools can use them without receiving or revealing their values.
 
 **System → Features** controls the same nine policy groups used by MCP. Changes take effect from the shared SQLite database on both surfaces. All groups default enabled except real `live_publishing`; enabling that group additionally requires a verified write credential. Disabling a group blocks its purpose-built dashboard routes and its MCP handlers, while the feature-control screen/tool remains reachable so the setting can be restored.
 
@@ -112,7 +112,7 @@ In the MCP-first evidence workflow, the agent imports and inspects enabled sourc
 - Mutations require an authenticated session, same-origin request, and explicit confirmation.
 - Responses containing application data use `Cache-Control: no-store`.
 - Browser assets are local, content-hashed, and served under a strict Content Security Policy.
-- LinkedIn tokens are encrypted at rest with an AES key wrapped by Windows DPAPI for the current user.
+- LinkedIn tokens are encrypted at rest with AES-256-GCM under a master key sealed by the platform's OS credential facility: Windows DPAPI for the current user, the macOS login Keychain, or a machine-id-derived key on Linux.
 - Stored token values are never returned by read routes.
 - A dashboard restart ends in-memory sessions; use the newly printed launch URL.
 
@@ -139,7 +139,7 @@ See [docs/dashboard-design.md](../docs/dashboard-design.md) for design-system de
 | Port 4780 is already in use | Use the existing dashboard or change `dashboard.port` before restarting. |
 | Printed link says the session ended | Restart the dashboard and use the new single-use URL. |
 | Dashboard shows no MCP data | Make `LINKEDIN_MCP_HOME` identical in both processes. |
-| Credential storage reports DPAPI failure | Run under the same Windows account that created the home; copied DPAPI material cannot be decrypted elsewhere. |
+| Credential storage cannot open the vault | The sealed master key is bound to this account and machine. Windows: run under the same account that created the home. macOS: the login Keychain item is bound to this Mac and account. Linux: the key is derived from the host machine id, so a copied or reimaged host strands the secrets. In every case, delete the `secrets` folder and re-enter the token. |
 | Visual tests cannot start | Install the Playwright browser required by the test configuration. |
 
 Return to the [application README](../README.md) or configure the [MCP server](../linkedin-mcp-server/README.md).

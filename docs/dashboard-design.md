@@ -24,8 +24,9 @@ to let a person make consequential decisions with the evidence in front of them.
    unconsumed.
 3. **Consequence in the verb.** *Reject permanently*, *Approve exactly this
    text*, *Delete all local data*. Never *OK*.
-4. **Provenance is visible.** Every audited action shows **You** / **Model** /
-   **System**. Who acted is the guarantee this product sells.
+4. **Provenance is visible.** Every audited action shows **You**, **Model**,
+   **You (CLI)**, or **System** — the four actors the domain records. Who acted
+   is the guarantee this product sells.
 5. **Density with air.** Compact rows, generous section spacing, tabular
    numerals on every count and hash.
 6. **Colour carries state, never decoration.** One accent for interaction;
@@ -96,7 +97,7 @@ Colour is never the only carrier: every chip renders a glyph and a word.
   `ui-monospace, 'Cascadia Mono', Consolas, monospace`.
 - **No web fonts and no remote assets of any kind.** Required by local-first
   operation, enforced by the CSP and by a test over the built bundle.
-- Scale 12 / 13 / **14 base** / 16 / 20 / 26; `tabular-nums` on counts, hashes
+- Scale 12 / 13 / **14 base** / 16 / 20 / 22; `tabular-nums` on counts, hashes
   and timestamps.
 - Spacing on a 4px base. Radii 4 controls / 6 cards / 10 overlays / 999 chips.
 - Elevation: dark uses borders only, light uses border plus one soft shadow.
