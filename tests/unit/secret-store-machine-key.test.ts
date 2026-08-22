@@ -63,8 +63,12 @@ describe('the vault on a machine-key host', () => {
     // the vault starts fresh, rather than handing DPAPI a blob it will reject
     // with a message about corruption.
     expect(masterKeyFileName('linux')).toBe('master.key.mkey');
-    expect(masterKeyFileName('darwin')).toBe('master.key.mkey');
     expect(masterKeyFileName('win32')).toBe('master.key.dpapi');
+    // macOS seals under a Keychain-held key, which is a third scheme and so a
+    // third name: a secrets folder carried between any two of the platforms is
+    // not found rather than misread.
+    expect(masterKeyFileName('darwin')).toBe('master.key.keychain');
+    expect(masterKeyFileName('freebsd')).toBe('master.key.mkey');
   });
 
   it('creates the key file once and reuses it across stores', async () => {
@@ -159,7 +163,9 @@ describe('a data home moved somewhere it does not belong', () => {
       expect.unreachable('a foreign key format must be refused');
     } catch (error) {
       expect((error as DomainError).blockers).toEqual(
-        expect.arrayContaining([expect.stringMatching(/machine_key_(bad_format|unwrap_failed)/)]),
+        expect.arrayContaining([
+          expect.stringMatching(/sealed_key_bad_format|machine_key_unwrap_failed/),
+        ]),
       );
     }
   });

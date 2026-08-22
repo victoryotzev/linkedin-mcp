@@ -104,9 +104,42 @@ describe('the Linux default', () => {
     );
   });
 
-  it('applies to any non-Windows platform, not only to linux', () => {
-    expect(resolveDataHome({ HOME: '/Users/alex' }, 'darwin')).toBe(
-      '/Users/alex/.local/share/linkedin-mcp',
+  it('applies to any POSIX platform that is not macOS', () => {
+    expect(resolveDataHome({ HOME: '/home/alex' }, 'freebsd')).toBe(
+      '/home/alex/.local/share/linkedin-mcp',
     );
+  });
+});
+
+describe('the macOS default', () => {
+  it('lands in Application Support, where a Mac keeps application data', () => {
+    // Apple's documented location, and where Mac tooling and a Mac user both
+    // expect to find it. `~/.local/share` would work and would be wrong.
+    expect(resolveDataHome({ HOME: '/Users/alex' }, 'darwin')).toBe(
+      '/Users/alex/Library/Application Support/linkedin-mcp',
+    );
+  });
+
+  it('still honours XDG_DATA_HOME when it has been set deliberately', () => {
+    // Not the Apple convention, but a member who set it has already said where
+    // application data goes on their machine; overruling that would be this
+    // product deciding it knows better.
+    expect(
+      resolveDataHome({ XDG_DATA_HOME: '/Users/alex/data', HOME: '/Users/alex' }, 'darwin'),
+    ).toBe('/Users/alex/data/linkedin-mcp');
+  });
+
+  it('says which variables it looked at when none is set', () => {
+    expect(() => resolveDataHome({}, 'darwin')).toThrowError(
+      /LINKEDIN_MCP_HOME, XDG_DATA_HOME or HOME/i,
+    );
+  });
+
+  it('keeps the space in "Application Support" rather than mangling it', () => {
+    // A path with a space in it is the ordinary case on macOS, and it is also
+    // the shape that broke backups on Windows. Asserted rather than assumed.
+    const home = resolveDataHome({ HOME: '/Users/alex' }, 'darwin');
+    expect(home).toContain('Application Support');
+    expect(home.split('/')).toContain('Application Support');
   });
 });

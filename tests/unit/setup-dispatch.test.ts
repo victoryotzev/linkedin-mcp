@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MANUAL_SETUP_NOTE, planSetup } from '../../scripts/setup-mcp.mjs';
+import { manualSetupNote, planSetup } from '../../scripts/setup-mcp.mjs';
 
 // What `npm run setup:mcp` does on a platform its assistant was never written
 // for.
@@ -28,6 +28,8 @@ describe('deciding what setup:mcp should do', () => {
 });
 
 describe('what it tells someone who cannot run the assistant', () => {
+  const MANUAL_SETUP_NOTE = manualSetupNote('linux');
+
   it('says why, so the reader does not go looking for a broken script', () => {
     expect(MANUAL_SETUP_NOTE).toMatch(/Windows-only/i);
   });
@@ -49,6 +51,14 @@ describe('what it tells someone who cannot run the assistant', () => {
     expect(MANUAL_SETUP_NOTE).toContain('$XDG_DATA_HOME/linkedin-mcp');
     expect(MANUAL_SETUP_NOTE).toContain('~/.local/share/linkedin-mcp');
     expect(MANUAL_SETUP_NOTE).toMatch(/optional/i);
+  });
+
+  it('names the macOS home on macOS, and never the Linux one', () => {
+    // Printing ~/.local/share to a Mac user sends them to a directory macOS
+    // does not use for application data — worse than printing nothing.
+    const mac = manualSetupNote('darwin');
+    expect(mac).toContain('Library/Application Support/linkedin-mcp');
+    expect(mac).not.toContain('.local/share');
   });
 
   it('points at the per-client examples for anyone who wants one', () => {

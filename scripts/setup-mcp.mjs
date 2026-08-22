@@ -23,30 +23,45 @@ export function planSetup(platform = process.platform) {
   return { action: 'explain', platform };
 }
 
-export const MANUAL_SETUP_NOTE = [
-  'The interactive setup assistant is Windows-only: it is PowerShell, and it writes',
-  'Windows client configuration paths.',
-  '',
-  'On this platform, configure your MCP client directly. Every client has a worked',
-  'example in linkedin-mcp-server/README.md; the generic form is three fields:',
-  '',
-  '  {',
-  '    "command": "/usr/bin/node",',
-  '    "args": ["<repo>/linkedin-mcp-server/dist/index.js"],',
-  '    "env": { "LINKEDIN_MCP_HOME": "$HOME/.local/share/linkedin-mcp" }',
-  '  }',
-  '',
-  'Build the server first with `npm run build`. LINKEDIN_MCP_HOME is optional —',
-  'without it the default is $XDG_DATA_HOME/linkedin-mcp, or',
-  '~/.local/share/linkedin-mcp when XDG_DATA_HOME is unset — but setting the same',
-  'absolute value everywhere is what makes every client and the dashboard share one',
-  'database, artifact store and credential vault.',
-].join('\n');
+/**
+ * What to do instead, on a platform the assistant was not written for.
+ *
+ * The default data home differs between them, so this does too: printing the
+ * Linux path to a Mac would send someone to a directory macOS does not use for
+ * application data, which is worse than printing nothing.
+ */
+export function manualSetupNote(platform = process.platform) {
+  const isMac = platform === 'darwin';
+  const home = isMac
+    ? '$HOME/Library/Application Support/linkedin-mcp'
+    : '$HOME/.local/share/linkedin-mcp';
+  const fallback = isMac
+    ? '~/Library/Application Support/linkedin-mcp when it is unset'
+    : '~/.local/share/linkedin-mcp when it is unset';
+  return [
+    'The interactive setup assistant is Windows-only: it is PowerShell, and it writes',
+    'Windows client configuration paths.',
+    '',
+    'On this platform, configure your MCP client directly. Every client has a worked',
+    'example in linkedin-mcp-server/README.md; the generic form is three fields:',
+    '',
+    '  {',
+    '    "command": "/usr/bin/node",',
+    '    "args": ["<repo>/linkedin-mcp-server/dist/index.js"],',
+    `    "env": { "LINKEDIN_MCP_HOME": "${home}" }`,
+    '  }',
+    '',
+    'Build the server first with `npm run build`. LINKEDIN_MCP_HOME is optional —',
+    `without it the default is $XDG_DATA_HOME/linkedin-mcp, or ${fallback} —`,
+    'but setting the same absolute value everywhere is what makes every client and',
+    'the dashboard share one database, artifact store and credential vault.',
+  ].join('\n');
+}
 
 function main() {
   const plan = planSetup();
   if (plan.action === 'explain') {
-    console.error(MANUAL_SETUP_NOTE);
+    console.error(manualSetupNote(plan.platform));
     // Non-zero: the script was asked to configure something and did not.
     process.exitCode = 1;
     return;

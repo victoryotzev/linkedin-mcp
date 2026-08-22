@@ -14,4 +14,4 @@ export interface SetupPlan {
 }
 
 export declare function planSetup(platform?: string): SetupPlan;
-export declare const MANUAL_SETUP_NOTE: string;
+export declare function manualSetupNote(platform?: string): string;

@@ -1,6 +1,7 @@
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import { hkdfSync } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { DomainError } from '@linkedin-mcp/shared';
+import { KEK_BYTES, openKey, sealKey } from './sealedKey.ts';
 
 // The Linux stand-in for DPAPI.
 //
@@ -27,11 +28,6 @@ import { DomainError } from '@linkedin-mcp/shared';
 // Reimaging the host changes the machine id and strands the stored secrets,
 // which is the same outcome Windows has after a profile loss. The remedy is
 // identical: delete the secrets folder and paste the token again.
-
-const WRAP_VERSION = 1;
-const NONCE_BYTES = 12;
-const TAG_BYTES = 16;
-const KEK_BYTES = 32;
 
 // Fixed, non-secret, and versioned. Changing either string changes every
 // derived key, so they are part of the on-disk format rather than decoration.
@@ -111,40 +107,19 @@ export function deriveKeyEncryptionKey(identity: MachineIdentity): Buffer {
   return Buffer.from(derived);
 }
 
-/** `[version][nonce][tag][ciphertext]`, so the shape is checked before the tag is. */
+// The seal itself is shared with the macOS vault — only the custody of the key
+// differs between them — so it lives in sealedKey.ts and these two name the
+// derivation's own failure and remedy.
+
 export function wrapWithMachineKey(plaintext: Buffer, kek: Buffer): Buffer {
-  const nonce = randomBytes(NONCE_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', kek, nonce);
-  // The version travels as additional authenticated data as well as in the
-  // header, so a blob relabelled as another version fails to authenticate
-  // rather than being parsed under rules it was not written with.
-  cipher.setAAD(Buffer.of(WRAP_VERSION));
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  return Buffer.concat([Buffer.of(WRAP_VERSION), nonce, cipher.getAuthTag(), ciphertext]);
+  return sealKey(plaintext, kek);
 }
 
 export function unwrapWithMachineKey(wrapped: Buffer, kek: Buffer, keyPath: string): Buffer {
-  const header = 1 + NONCE_BYTES + TAG_BYTES;
-  if (wrapped.length <= header || wrapped[0] !== WRAP_VERSION) {
-    throw new DomainError(
-      'INTEGRITY_ERROR',
-      `${keyPath} is not a v${WRAP_VERSION} machine-wrapped master key. A secrets folder written on Windows, or by another build, cannot be opened here. Delete that folder and paste your LinkedIn token again in the dashboard (Capabilities area).`,
-      { blockers: ['machine_key_bad_format'] },
-    );
-  }
-  const nonce = wrapped.subarray(1, 1 + NONCE_BYTES);
-  const tag = wrapped.subarray(1 + NONCE_BYTES, header);
-  const ciphertext = wrapped.subarray(header);
-  const decipher = createDecipheriv('aes-256-gcm', kek, nonce);
-  decipher.setAAD(Buffer.of(WRAP_VERSION));
-  decipher.setAuthTag(tag);
-  try {
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  } catch {
-    throw new DomainError(
-      'INTEGRITY_ERROR',
-      `${keyPath} did not authenticate against this host's key. The vault key is derived from the machine id and your user id, so a secrets folder copied from another machine or written by another account can never be opened here, and a reimaged host counts as another machine. Delete that folder and paste your LinkedIn token again in the dashboard (Capabilities area).`,
-      { blockers: ['machine_key_unwrap_failed'] },
-    );
-  }
+  return openKey(wrapped, kek, {
+    keyPath,
+    remedy:
+      "did not authenticate against this host's key. The vault key is derived from the machine id and your user id, so a secrets folder copied from another machine or written by another account can never be opened here, and a reimaged host counts as another machine. Delete that folder and paste your LinkedIn token again in the dashboard (Capabilities area).",
+    failureBlocker: 'machine_key_unwrap_failed',
+  });
 }

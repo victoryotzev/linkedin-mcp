@@ -102,8 +102,15 @@ export function canonicalizePath(raw: string, platform: PathPlatform = hostPathP
  *
  * Case folding follows the platform rather than the host. Windows paths are
  * compared case-insensitively because the filesystem is; POSIX paths are not,
- * because there `/data/Evidence` and `/data/evidence` are two directories and
- * folding them together would report containment that does not exist.
+ * because on Linux `/data/Evidence` and `/data/evidence` are two directories
+ * and folding them together would report containment that does not exist.
+ *
+ * macOS sits between the two: APFS is case-insensitive by default and can be
+ * formatted case-sensitive, so neither answer is right for every volume. It is
+ * treated as POSIX, which errs toward refusing containment rather than
+ * inventing it — the safe direction. In practice the question rarely arises,
+ * because both sides of this comparison come from `realpathSync.native`, which
+ * returns the casing the filesystem actually stored.
  */
 export function isContainedIn(
   root: string,

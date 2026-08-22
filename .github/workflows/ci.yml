@@ -17,9 +17,12 @@ concurrency:
 
 jobs:
   build-and-test:
-    # Both supported platforms, every push. The path guard and the credential
-    # vault each have two implementations now, and the only way either stays
-    # honest is for both to run somewhere that actually is that platform.
+    # All three supported platforms, every push. The path guard has two rule
+    # sets and the credential vault has three implementations, and the only way
+    # any of them stays honest is for each to run somewhere that actually is
+    # that platform. macOS matters most here: it is the one whose vault talks
+    # to a binary this repository cannot stub convincingly, so `security`
+    # answering as assumed is something only a real Mac can prove.
     #
     # fail-fast is off deliberately: when one platform breaks, the other's
     # result is the most useful thing on the page, and cancelling it hides
@@ -27,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -79,13 +82,13 @@ jobs:
 
   clean-room:
     # A fresh runner with no prior data home is the closest thing this project
-    # has to a clean machine, so first-run behaviour is proved here — on both
-    # platforms, because "creates its own home and migrates" is exactly the
-    # claim most likely to be Windows-shaped without anyone noticing.
+    # has to a clean machine, so first-run behaviour is proved here — on all
+    # three, because "creates its own home and migrates" is exactly the claim
+    # most likely to be shaped by one platform without anyone noticing.
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
 
@@ -100,8 +103,9 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      # pwsh is present on the Linux runners too, so one script covers both.
-      # Every path is built with Join-Path rather than written with a separator.
+      # pwsh ships on the Linux and macOS runners too, so one script covers all
+      # three. Every path is built with Join-Path rather than written with a
+      # separator.
       - name: First run against an empty data home
         shell: pwsh
         env:

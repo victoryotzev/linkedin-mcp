@@ -7,9 +7,10 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Prerequisites
 
-- **Windows 10 or later, or Linux.** Both are supported and both run the full
-  suite on every push — see [docs/compatibility.md](docs/compatibility.md) for
-  what differs between them, and for why macOS is not on the list.
+- **Windows 10 or later, Linux, or macOS.** All three are supported and all
+  three run the full suite on every push — see
+  [docs/compatibility.md](docs/compatibility.md) for what differs between
+  them.
 - **Test both platforms' rules, from whichever you have.** The path guard, the
   data-home defaults and the non-DPAPI vault all take the platform as an
   argument precisely so a contributor on one can prove the other. A change to

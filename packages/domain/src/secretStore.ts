@@ -5,6 +5,7 @@ import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { withWriteTx, type Row, type SqliteDriver } from '@linkedin-mcp/db';
 import { DomainError } from '@linkedin-mcp/shared';
+import { readOrCreateKeychainKey, type KeychainRunner } from './keychain.ts';
 import {
   deriveKeyEncryptionKey,
   readMachineId,
@@ -12,20 +13,35 @@ import {
   wrapWithMachineKey,
   type MachineIdentity,
 } from './machineKey.ts';
+import { openKey, sealKey } from './sealedKey.ts';
 
-// Windows DPAPI (CurrentUser) is the only trust anchor here, and it is worth
-// being exact about what that buys. The OS wraps our master key with material
-// derived from this Windows account, so the file on disk is inert on another
-// machine, under another local account, and to anyone who images the drive.
-// What it does NOT do is protect the key from *this* user: any process running
-// as you can call Unprotect on the same file and read the key straight back.
-// There is no passphrase and no hardware binding. It raises the cost of
-// offline and cross-account theft; it is not a defence against malware
-// running as you.
+// Three trust anchors, one per platform, and it is worth being exact about
+// what each buys.
 //
-// A passphrase was considered and rejected: the dashboard is a background
-// local service, so the passphrase would end up cached in the same process —
-// this security model with extra steps and a worse failure mode.
+//   Windows  DPAPI (CurrentUser) wraps the master key with material derived
+//            from this Windows account.
+//   macOS    the login Keychain holds a random key-encryption key behind an
+//            access-control list (keychain.ts).
+//   Linux    the key-encryption key is derived from the machine id and uid and
+//            never stored (machineKey.ts).
+//
+// All three make the file on disk inert on another machine, under another
+// account, and to anyone who images the drive. None of them protects the key
+// from *this* user: on Windows any process running as you can call Unprotect,
+// on macOS `security` will hand the item to a process on its ACL, and on Linux
+// the machine id is world-readable so the key can simply be re-derived. There
+// is no passphrase and no hardware binding anywhere. They raise the cost of
+// offline and cross-account theft; none is a defence against malware running
+// as you.
+//
+// They are not equal, and SECURITY.md ranks them rather than implying parity:
+// macOS is strongest because its key is random and OS-held, Linux weakest
+// because its key is derivable from a public file.
+//
+// A passphrase was considered and rejected for all three: the dashboard is a
+// background local service and an MCP client starts the server with no
+// terminal, so the passphrase would end up cached in the same process — this
+// security model with extra steps and a worse failure mode.
 
 export interface SecretStore {
   put(name: string, value: string): Promise<void>;
@@ -56,6 +72,7 @@ const STORABLE_NAMES: readonly string[] = Object.values(SECRET_NAMES);
 // their key.
 const MASTER_KEY_FILE_DPAPI = 'master.key.dpapi';
 const MASTER_KEY_FILE_MACHINE = 'master.key.mkey';
+const MASTER_KEY_FILE_KEYCHAIN = 'master.key.keychain';
 
 // The unwrapped envelope is [version:1][key_id:8][aes-256 key:32]. The key id
 // is random and travels *inside* the wrapped blob rather than being derived
@@ -237,19 +254,55 @@ export function machineKeyWrapper(identity: MachineIdentity): KeyWrapper {
   };
 }
 
-/** The file name alone, which is knowable without building a wrapper or reading a machine id. */
+/**
+ * The macOS vault. The key-encryption key is random and held by the login
+ * Keychain; the file beside the database holds only the envelope sealed under
+ * it. That is the strongest of the three, because the key is neither derivable
+ * nor reproducible — see keychain.ts.
+ */
+export function keychainKeyWrapper(run?: KeychainRunner): KeyWrapper {
+  // One Keychain round trip per wrapper, not per operation, and cleared on
+  // failure so a locked keychain that is then unlocked does not stay broken for
+  // the life of the process.
+  let pending: Promise<Buffer> | null = null;
+  const kek = async (): Promise<Buffer> => {
+    pending ??= readOrCreateKeychainKey(run);
+    try {
+      return await pending;
+    } catch (error) {
+      pending = null;
+      throw error;
+    }
+  };
+  return {
+    fileName: MASTER_KEY_FILE_KEYCHAIN,
+    wrap: async (envelope) => sealKey(envelope, await kek()).toString('base64'),
+    unwrap: async (stored, keyPath) =>
+      openKey(Buffer.from(stored, 'base64'), await kek(), {
+        keyPath,
+        remedy:
+          'did not authenticate against the key this Mac holds in its login Keychain. That key is random and never leaves the Keychain, so a secrets folder copied from another Mac, or written by another account, can never be opened here. Delete that folder and paste your LinkedIn token again in the dashboard (Capabilities area).',
+        failureBlocker: 'keychain_unwrap_failed',
+      }),
+  };
+}
+
+/** The file name alone, which is knowable without building a wrapper or reaching the OS. */
 export function masterKeyFileName(platform: string = process.platform): string {
-  return platform === 'win32' ? MASTER_KEY_FILE_DPAPI : MASTER_KEY_FILE_MACHINE;
+  if (platform === 'win32') return MASTER_KEY_FILE_DPAPI;
+  if (platform === 'darwin') return MASTER_KEY_FILE_KEYCHAIN;
+  return MASTER_KEY_FILE_MACHINE;
 }
 
 export function hostKeyWrapper(platform: string = process.platform): KeyWrapper {
   if (platform === 'win32') return dpapiKeyWrapper();
+  if (platform === 'darwin') return keychainKeyWrapper();
   if (platform === 'linux') {
     return machineKeyWrapper({ machineId: readMachineId(), uid: userInfo().uid });
   }
-  // Named rather than assumed. macOS has no machine-id file and its keychain is
-  // a different mechanism again; guessing here would produce a vault whose
-  // guarantees nobody has stated.
+  // Named rather than assumed. A BSD has neither a machine-id file nor a
+  // Keychain, and guessing would produce a vault whose guarantees nobody has
+  // stated.
   throw new DomainError(
     'INTERNAL',
     `the credential vault has no key protection for ${platform}; LinkedIn credentials cannot be stored on this platform, and the rest of the product works without them`,

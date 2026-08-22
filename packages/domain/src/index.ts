@@ -113,12 +113,20 @@ export {
   createSecretStore,
   dpapiKeyWrapper,
   hostKeyWrapper,
+  keychainKeyWrapper,
   machineKeyWrapper,
   masterKeyFileName,
   type KeyWrapper,
   type SecretStore,
   type SecretStoreOptions,
 } from './secretStore.ts';
+export {
+  KEYCHAIN_ITEM,
+  readOrCreateKeychainKey,
+  type KeychainResult,
+  type KeychainRunner,
+} from './keychain.ts';
+export { KEK_BYTES, openKey, sealKey, type OpenKeyContext } from './sealedKey.ts';
 export {
   MACHINE_ID_PATHS,
   deriveKeyEncryptionKey,

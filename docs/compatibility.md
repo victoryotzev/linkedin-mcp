@@ -6,7 +6,8 @@
 |---|---|
 | Windows 10 or later | **Supported.** Full suite runs on `windows-latest` every push. |
 | Linux | **Supported.** Full suite runs on `ubuntu-latest` every push. |
-| macOS | **Unsupported.** Most of it would run; the vault has no implementation and nothing is tested. |
+| macOS | **Supported.** Full suite runs on `macos-latest` every push. |
+| Other POSIX (the BSDs) | **Unsupported.** The path rules would work; the vault has no implementation and refuses by name rather than guessing. |
 | Docker / containers | **Unsupported.** See below — the reason is narrower than it used to be. |
 
 Two things differ between the supported platforms, and both are implemented
@@ -21,28 +22,40 @@ rather than worked around.
    case-insensitive on Windows and case-sensitive on Linux, because on Linux
    `/data/Evidence` and `/data/evidence` are two directories and folding them
    together would report containment that does not exist.
-2. **The credential vault has two implementations.** Windows seals the master
-   key with DPAPI through Windows PowerShell 5.1. Linux derives the sealing key
-   from the host machine id and the calling user id and never writes it down
-   (`packages/domain/src/machineKey.ts:96-112`). Both keep the property the
-   product relies on — a data home copied to another machine or account cannot
-   be opened — and they differ in one way stated plainly in
-   [SECURITY.md](../SECURITY.md): `/etc/machine-id` is world-readable, so on
-   Linux any local process can derive the same key, where DPAPI at least makes
-   an attacker ask the OS.
+2. **The credential vault has three implementations**, and they are not equally
+   strong. All three keep the property the product relies on — a data home
+   copied to another machine or account cannot be opened — but the custody of
+   the sealing key differs:
 
-Neither rule set is tested only on its own platform. Both take the platform as
-an argument, so the Windows rules run on the Linux runner and the reverse:
-`tests/unit/path-guard-platforms.test.ts`,
-`tests/unit/data-home-platforms.test.ts`,
-`tests/unit/machine-key.test.ts`,
-`tests/unit/secret-store-machine-key.test.ts`.
+   | Platform | Key custody | Strength |
+   |---|---|---|
+   | macOS | Random, held by the login Keychain behind an ACL (`packages/domain/src/keychain.ts`) | strongest |
+   | Windows | DPAPI, bound to the account, via Windows PowerShell 5.1 | |
+   | Linux | Derived from machine id + uid, never stored (`packages/domain/src/machineKey.ts:92-108`) | weakest |
+
+   The ranking is stated rather than implied: `/etc/machine-id` is
+   world-readable, so on Linux any local process can derive the same key, where
+   DPAPI makes an attacker ask the OS and the Keychain holds a random key it
+   never had to publish. See [SECURITY.md](../SECURITY.md).
+
+Nothing here is tested only on its own platform. The path rules, the data-home
+defaults and both non-DPAPI vaults take their platform — or, for the Keychain,
+the external command itself — as an argument, so each is exercised from any
+host: `tests/unit/path-guard-platforms.test.ts`,
+`tests/unit/data-home-platforms.test.ts`, `tests/unit/machine-key.test.ts`,
+`tests/unit/secret-store-machine-key.test.ts`, `tests/unit/keychain.test.ts`.
+
+What injection cannot prove is that the external commands behave as assumed —
+that `security` really exits 44 for a missing item, that a `-T`-authorised read
+really does not raise a dialog. Only a real Mac and a real Windows box can show
+that, which is why both are in the matrix rather than being stood in for.
 
 What remains Windows-only is the DPAPI half of the vault, which needs real
-PowerShell, and the interactive setup assistant, which is PowerShell. Linux
-users configure their MCP client by hand — one JSON block, documented per
-client in [the server README](../linkedin-mcp-server/README.md) — and
-`npm run setup:mcp` prints exactly that rather than failing with `ENOENT`.
+PowerShell, and the interactive setup assistant, which is PowerShell. On Linux
+and macOS you configure your MCP client by hand — one JSON block, documented
+per client in [the server README](../linkedin-mcp-server/README.md) — and
+`npm run setup:mcp` prints exactly that block, with the right data home for the
+platform, rather than failing with `ENOENT`.
 
 ### Data home
 
@@ -50,6 +63,11 @@ client in [the server README](../linkedin-mcp-server/README.md) — and
 |---|---|---|
 | Windows | `%LOCALAPPDATA%\linkedin-mcp` | `LINKEDIN_MCP_HOME` |
 | Linux | `$XDG_DATA_HOME/linkedin-mcp`, else `~/.local/share/linkedin-mcp` | `LINKEDIN_MCP_HOME` |
+| macOS | `$XDG_DATA_HOME/linkedin-mcp` when set, else `~/Library/Application Support/linkedin-mcp` | `LINKEDIN_MCP_HOME` |
+
+XDG is honoured on macOS as well as Linux: a member who has set
+`XDG_DATA_HOME` has already said where application data goes on their machine,
+and overruling that would be this product deciding it knows better.
 
 ### Why there is no Docker image
 
@@ -70,6 +88,7 @@ first-class way to run this.
 | npm | any version shipping with Node 24 | workspaces |
 | Windows PowerShell | 5.1 (ships with Windows) | Windows only: DPAPI, and the setup assistant. Not required on Linux, where the vault derives its key instead. |
 | `/etc/machine-id` | present (systemd), or `/var/lib/dbus/machine-id` | Linux only: the vault derives its sealing key from it. Absent means credentials cannot be stored; everything else still runs. |
+| `/usr/bin/security` | ships with macOS | macOS only: the vault stores its sealing key in the login Keychain. A locked keychain is reported as retryable, not as corruption. |
 | Document formats | PDF, DOCX, CSV, Markdown, plain text, ZIP archives, and source files. No images, so no OCR — see [known-limitations.md](known-limitations.md) |
 | SQLite FTS5 | optional | Search degrades to `LIKE` when absent; safety paths are unaffected (`packages/db/src/open.ts:84-92`) |
 

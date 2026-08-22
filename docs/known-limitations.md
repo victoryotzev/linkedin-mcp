@@ -5,12 +5,14 @@ built yet. Each says which.
 
 ## Platform and access
 
-- **Windows and Linux only.** *By construction.* macOS has no vault
-  implementation and is untested. On Linux the vault derives its key from
-  `/etc/machine-id`, which is world-readable, so a local process can derive it
-  too — weaker than DPAPI in that one respect. The interactive setup assistant
-  is PowerShell and therefore Windows-only; Linux setup is one JSON block by
-  hand. See [compatibility.md](compatibility.md).
+- **Windows, Linux and macOS.** *All three supported and tested on every push.*
+  The vaults are not equally strong: macOS holds a random key in the Keychain,
+  Windows uses DPAPI, and Linux derives its key from `/etc/machine-id`, which is
+  world-readable — so on Linux a local process can derive it too. The
+  interactive setup assistant is PowerShell and therefore Windows-only; setup
+  elsewhere is one JSON block by hand, which `npm run setup:mcp` prints. Other
+  platforms, including the BSDs, are unsupported: the path rules would work, the
+  vault has no implementation. See [compatibility.md](compatibility.md).
 - **The LinkedIn read lane needs an EEA or Switzerland member.** *LinkedIn's
   limit, not ours.* Member Data Portability tokens are issued to nobody else.
   Everything that does not touch LinkedIn works regardless of where you are.

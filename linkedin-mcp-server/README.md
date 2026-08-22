@@ -2,11 +2,11 @@
 
 The MCP server is the primary workflow engine of the LinkedIn app. It is a local stdio process and runs independently of the optional dashboard, which is a synchronized visual support surface.
 
-**Supported platforms: Windows 10 or later, and Linux.** Both run the full
-test suite on every push. Evidence import accepts each platform's own
-absolute-path shape, and the credential vault uses DPAPI on Windows and a key
-derived from the machine id on Linux. macOS is untested and unsupported. The
-optional LinkedIn read lane is limited further: LinkedIn issues Member Data Portability
+**Supported platforms: Windows 10 or later, Linux, and macOS.** All three run
+the full test suite on every push. Evidence import accepts each platform's own
+absolute-path shape, and the credential vault uses DPAPI on Windows, the login
+Keychain on macOS, and a key derived from the machine id on Linux. The optional
+LinkedIn read lane is limited further: LinkedIn issues Member Data Portability
 tokens only to members located in the European Economic Area or Switzerland.
 
 ## Build and verify

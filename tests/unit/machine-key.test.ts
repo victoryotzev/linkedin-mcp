@@ -189,7 +189,7 @@ describe('wrapping the master key envelope', () => {
       unwrapWithMachineKey(relabelled, kek, 'v2.mkey');
       expect.unreachable('an unknown version must be refused');
     } catch (error) {
-      expect((error as DomainError).blockers).toContain('machine_key_bad_format');
+      expect((error as DomainError).blockers).toContain('sealed_key_bad_format');
     }
   });
 
@@ -200,7 +200,7 @@ describe('wrapping the master key envelope', () => {
         unwrapWithMachineKey(bogus, kek, 'short.mkey');
         expect.unreachable('a short blob must be refused');
       } catch (error) {
-        expect((error as DomainError).blockers).toContain('machine_key_bad_format');
+        expect((error as DomainError).blockers).toContain('sealed_key_bad_format');
       }
     }
   });

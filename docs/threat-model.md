@@ -12,7 +12,7 @@ traced end to end is written as a limitation rather than a guarantee.
 | # | Asset | Where | Worst case if lost |
 |---|---|---|---|
 | A1 | LinkedIn access tokens (read + write lanes) | `secrets` table, AES-256-GCM | Post as the member; read all portability data |
-| A2 | Sealed master key | Windows: `<home>\secrets\master.key.dpapi` (DPAPI). Linux: `<home>/secrets/master.key.mkey`, sealed under a key derived from the machine id and uid. Both mode `0o600` | Decrypts A1 — on Windows only under the same account, on Linux only on the same host under the same uid |
+| A2 | Sealed master key | Windows: `master.key.dpapi` (DPAPI). macOS: `master.key.keychain`, sealed under a random key the login Keychain holds. Linux: `master.key.mkey`, sealed under a key derived from the machine id and uid. All under `<home>/secrets/`, mode `0o600` | Decrypts A1 — only under the same account, and on macOS and Linux only on the same host |
 | A3 | The SQLite database | `<home>\data\linkedin.sqlite3` | Full profile, evidence, drafts, approvals, audit history |
 | A4 | Artifact store | `<home>\artifacts\` | Verbatim CVs, exports, repository files |
 | A5 | Audit chain | `audit_events` + the `audit.head` anchor | Forged provenance, enabling an unauthorised publication |
@@ -38,7 +38,7 @@ traced end to end is written as a limitation rather than a guarantee.
   local process derives it without asking anything. The Linux position is
   therefore weaker inside this already-out-of-scope class — an attacker there
   reads a public file rather than calling an OS API — and it is stated plainly
-  at `packages/domain/src/machineKey.ts:5-27` rather than left to be inferred.
+  at `packages/domain/src/machineKey.ts:6-30` rather than left to be inferred.
   A passphrase was considered and rejected on both: a background local service
   would cache it in the same process, which is this model with extra steps and
   a worse failure mode, and an MCP client starts the server with no terminal to
@@ -63,7 +63,7 @@ Real publishing is gated a second time by a feature flag that defaults off
 (`packages/domain/src/featureControlService.ts:70-73`) and a third time by a
 verified write lane. **Secret entry is structurally unreachable from this
 channel** — the vault name allowlist has no path in
-(`packages/domain/src/secretStore.ts:42,256-261`).
+(`packages/domain/src/secretStore.ts:66,399-405`).
 
 *Residual:* a member who pastes a confirmation string because a model asked them
 to has satisfied the contract. The contracts make consequential actions
@@ -150,7 +150,7 @@ a ciphertext moved between lanes.
 *Controls:* AES-256-GCM with the secret name and key id bound in as additional
 authenticated data, so a ciphertext lifted from the read-lane row into the
 write-lane row fails to decrypt rather than silently swapping tokens between two
-LinkedIn apps (`packages/domain/src/secretStore.ts:289-291`). The key id is
+LinkedIn apps (`packages/domain/src/secretStore.ts:342-344`). The key id is
 random and travels *inside* the wrapped blob, so the plaintext `key_id` column
 reveals nothing.
 
@@ -159,11 +159,24 @@ reveals nothing.
 *Threat, Windows:* a `powershell.exe` planted earlier on `PATH` receives the
 master key; key material leaks through argv, which is world-readable.
 
-*Controls:* absolute `System32` path (`packages/domain/src/secretStore.ts:67-72`);
+*Controls:* absolute `System32` path (`packages/domain/src/secretStore.ts:98-103`);
 `-EncodedCommand` so only the *script* rides in argv while key material crosses
-**stdin** (`:88-95`); stderr is drained (a full pipe would stall the child) but
+**stdin** (`:123-163`); stderr is drained (a full pipe would stall the child) but
 deliberately **discarded**, because a .NET exception message is the one channel
 that could echo our own input back into an error string.
+
+*Threat, macOS:* a `security` planted earlier on `PATH` receives the vault key;
+an authorization dialog blocks a server nobody is watching.
+
+*Controls:* absolute `/usr/bin/security`, the same reasoning as the PowerShell
+path; the item is created with `-T /usr/bin/security`, which puts that binary on
+its ACL so later reads do not prompt; every call is bounded by a timeout, so a
+dialog that does appear becomes a stated error rather than a hung server
+(`packages/domain/src/keychain.ts`). Key material does cross argv on creation,
+which would be unacceptable on Windows — macOS restricts a process's arguments
+to the same user and root through `kern.procargs2`, both already out of scope
+here, and what crosses is a random key-encryption key rather than a LinkedIn
+token.
 
 *Threat, Linux:* there is no subprocess and no argv, so that class is absent.
 What replaces it is the derivation itself — a machine id that is not what it
@@ -172,7 +185,7 @@ claims to be would put the vault's guarantee on an unchecked value.
 *Controls:* the machine id is required to be exactly 32 hexadecimal characters
 before a key is derived from it, and a missing or empty one is refused with a
 message saying the vault is unavailable and the rest of the product is not
-(`packages/domain/src/machineKey.ts:62-90`). The wrapped blob is AES-256-GCM
+(`packages/domain/src/machineKey.ts:58-86`). The wrapped blob is AES-256-GCM
 with the format version bound in as additional authenticated data, so a blob
 relabelled as another version fails to authenticate rather than being parsed
 under rules it was not written with.

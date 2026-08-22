@@ -30,34 +30,40 @@ External LinkedIn features are optional. They remain unavailable until the corre
 
 ## Requirements
 
-- **Windows 10 or later, or Linux.** Both are supported and both run the full
-  test suite on every push.
+- **Windows 10 or later, Linux, or macOS.** All three are supported and all
+  three run the full test suite on every push.
 - Node.js 24 or later (the database uses the built-in `node:sqlite`)
 - npm
 
 Evidence import accepts each platform's own absolute-path shape: drive-letter
-paths on Windows, `/`-rooted paths on Linux. The rules genuinely differ —
-Windows also refuses UNC paths, alternate data streams and reserved device
-names, while Linux refuses embedded NUL bytes and compares paths
-case-sensitively — because the dangerous shapes differ, not because one
-platform is trusted more.
+paths on Windows, `/`-rooted paths on Linux and macOS. The rules genuinely
+differ — Windows also refuses UNC paths, alternate data streams and reserved
+device names, while the POSIX rules refuse embedded NUL bytes and the ambiguous
+`//` root — because the dangerous shapes differ, not because one platform is
+trusted more.
 
-The credential vault differs too, and the difference is worth knowing before
-you rely on it. Windows seals the master key with DPAPI. Linux has no
-equivalent that works without a passphrase you would have to type every time an
-MCP client starts the server, so the key is **derived** instead, from the
-host's machine id and your user id, and never written down. Both give the same
-practical guarantee — a data home copied to another machine or another account
-cannot be opened — but on Linux the machine id is world-readable, so any
-process on that box can derive the same key. Neither defends against software
-running as you; see [SECURITY.md](SECURITY.md).
+The credential vault differs too, and the differences are worth knowing before
+you rely on it. All three give the same practical guarantee — a data home
+copied to another machine or another account cannot be opened — but they are
+not equally strong:
 
-macOS is **not** supported. Much of the product would run, but the vault has no
-implementation there and nothing is tested on it.
+| Platform | How the master key is sealed | |
+|---|---|---|
+| **macOS** | A random key in the login Keychain, held by the OS behind an access-control list | strongest |
+| **Windows** | DPAPI, bound to your Windows account | |
+| **Linux** | Derived from the host machine id and your user id, never written down | weakest — `/etc/machine-id` is world-readable, so any local process can derive the same key |
 
-The interactive setup assistant is Windows-only. On Linux you configure your
-MCP client by hand, which is one JSON block — see
-[MCP server setup](linkedin-mcp-server/README.md).
+None of them defends against software running as you, which
+[SECURITY.md](SECURITY.md) has always listed as out of scope. The ranking
+matters only if a local attacker is in your threat model; if so, prefer macOS
+or Windows, or do not store LinkedIn credentials at all — everything else works
+without them.
+
+The interactive setup assistant is Windows-only, because it is PowerShell. On
+Linux and macOS you configure your MCP client by hand, which is one JSON block
+— see [MCP server setup](linkedin-mcp-server/README.md). `npm run setup:mcp`
+prints exactly that block, with the right data home for your platform, rather
+than failing.
 
 The optional LinkedIn read lane has a second, separate limit: LinkedIn issues
 Member Data Portability tokens only to members located in the European Economic
@@ -129,7 +135,7 @@ The dashboard and every configured MCP process open the same local application h
 |---|---|
 | Evidence, claims, profile state, decisions, drafts, revisions, approvals, publication history, audit events, settings, and progress | `data\linkedin.sqlite3` |
 | Imported working copies and generated artifacts | `artifacts\` |
-| Encrypted LinkedIn credentials | Ciphertext in SQLite plus the DPAPI-wrapped key in `secrets\` |
+| Encrypted LinkedIn credentials | Ciphertext in SQLite plus the sealed master key in `secrets\` — DPAPI on Windows, Keychain-sealed on macOS, machine-derived on Linux |
 | Backups | `backups\` |
 
 SQLite WAL mode and bounded write retries allow the dashboard and MCP clients to run at the same time. The dashboard refreshes the current screen when it regains focus and periodically while visible, so agent-side changes appear without restarting it.

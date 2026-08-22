@@ -46,10 +46,10 @@ export function resolveDataHome(
     );
   }
 
-  // XDG first, then the location the specification says to assume when it is
-  // unset. Both are honoured rather than only one, because a member who has set
-  // XDG_DATA_HOME has said where application data goes and this is application
-  // data.
+  // XDG first on both POSIX platforms, including macOS. It is not the Apple
+  // convention, but a member who has set XDG_DATA_HOME has said where
+  // application data goes on their machine, and overruling that would be this
+  // product deciding it knows better.
   const xdg = env.XDG_DATA_HOME?.trim();
   if (xdg) {
     return normalizeAbsolute(posixPath.join(xdg, APPLICATION_DIRECTORY), 'XDG_DATA_HOME', platform);
@@ -60,11 +60,15 @@ export function resolveDataHome(
       'None of LINKEDIN_MCP_HOME, XDG_DATA_HOME or HOME is set; cannot locate the LinkedIn app data directory',
     );
   }
-  return normalizeAbsolute(
-    posixPath.join(home, '.local', 'share', APPLICATION_DIRECTORY),
-    'HOME',
-    platform,
-  );
+  // Otherwise each platform's own convention: Apple documents
+  // ~/Library/Application Support for exactly this, and it is where a Mac user
+  // and Mac tooling both expect to find it. Elsewhere, the location the XDG
+  // specification says to assume when the variable is unset.
+  const relative =
+    platform === 'darwin'
+      ? [home, 'Library', 'Application Support', APPLICATION_DIRECTORY]
+      : [home, '.local', 'share', APPLICATION_DIRECTORY];
+  return normalizeAbsolute(posixPath.join(...relative), 'HOME', platform);
 }
 
 function normalizeAbsolute(value: string, variable: string, platform: string): string {

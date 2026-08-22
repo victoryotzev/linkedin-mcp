@@ -51,10 +51,11 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
 |---|---|
 | Bearer token stripped from error bodies before they can reach a log, message, or MCP result — redaction runs before truncation | `packages/linkedin/src/dmaClient.ts:77-79` |
 | LinkedIn host pinned; redirects refused outright | `packages/linkedin/src/dmaClient.ts:58-67`, `packages/linkedin/src/adapters.ts:100-111` |
-| Tokens encrypted with AES-256-GCM; the name and key id are bound in as AAD, so a ciphertext moved between lanes fails to decrypt instead of silently swapping credentials | `packages/domain/src/secretStore.ts:289-291` |
-| Windows: master key wrapped by DPAPI (CurrentUser); key material crosses stdin, never argv; `powershell.exe` resolved by absolute path so a planted binary on `PATH` cannot receive it | `packages/domain/src/secretStore.ts:67-72,88-95` |
-| Linux: master key sealed under a key derived from the host machine id and your uid, never written to disk; a data home copied to another machine or account does not open | `packages/domain/src/machineKey.ts:96-112` |
-| Secret names are allowlisted — the vault cannot grow into a general key-value store | `packages/domain/src/secretStore.ts:42,256-261` |
+| Tokens encrypted with AES-256-GCM; the name and key id are bound in as AAD, so a ciphertext moved between lanes fails to decrypt instead of silently swapping credentials | `packages/domain/src/secretStore.ts:342-344` |
+| Windows: master key wrapped by DPAPI (CurrentUser); key material crosses stdin, never argv; `powershell.exe` resolved by absolute path so a planted binary on `PATH` cannot receive it | `packages/domain/src/secretStore.ts:98-103,88-95` |
+| macOS: master key sealed under a random key held by the login Keychain behind an ACL; the item is created with `-T /usr/bin/security` so reads never raise a dialog an unattended server could not answer | `packages/domain/src/keychain.ts` |
+| Linux: master key sealed under a key derived from the host machine id and your uid, never written to disk; a data home copied to another machine or account does not open | `packages/domain/src/machineKey.ts:92-108` |
+| Secret names are allowlisted — the vault cannot grow into a general key-value store | `packages/domain/src/secretStore.ts:66,399-405` |
 | Backups refuse to contain anything under `secrets/` | `packages/domain/src/backupService.ts:294-295` |
 | Dashboard binds `127.0.0.1` only, with an exact `Host` allowlist (kills DNS rebinding) and a `Sec-Fetch-Site` check | `linkedin-dashboard/src/server.ts:84`, `linkedin-dashboard/src/auth.ts:27-29,72-78` |
 | Launch token is CSPRNG, stored hashed, compared in constant time **before** the spent check, and single-use | `linkedin-dashboard/src/auth.ts:23-49` |
@@ -85,27 +86,33 @@ someone else (`packages/linkedin/src/dmaClient.ts:58-67`).
 These are out of scope. Reports about them will be closed as working-as-intended
 unless they show something beyond the stated model.
 
-- **Protecting you from software running as you.** On Windows, DPAPI wraps the
-  master key with material derived from your account; any process running as
-  you can call Unprotect and read it back. On Linux the key is derived from
-  `/etc/machine-id` and your user id, and that file is world-readable, so any
-  local process can derive the same key. There is no passphrase and no hardware
-  binding on either. Both raise the cost of offline and cross-account theft;
-  neither is a defence against malware running as you.
+- **Protecting you from software running as you.** None of the three vaults
+  does this, and they are not equally close to it:
 
-  The two are not equivalent, and the difference is here rather than buried:
-  **DPAPI makes an attacker ask the operating system to unwrap, the Linux
-  derivation does not.** A local attacker on Linux needs only to read a public
-  file and know your uid. If that gap matters to your threat model, use
-  Windows, or do not store LinkedIn credentials at all — the rest of the product
-  works without them. The reasoning is written out at
-  `packages/domain/src/machineKey.ts:5-27`.
+  | Platform | Key custody | What a local process running as you must do |
+  |---|---|---|
+  | macOS | Random, held by the login Keychain | Ask `security` for an item its ACL already trusts |
+  | Windows | DPAPI, bound to your account | Call Unprotect on the same file |
+  | Linux | Derived from `/etc/machine-id` + uid | Read a world-readable file and know your uid |
+
+  There is no passphrase and no hardware binding on any of them. All three
+  raise the cost of offline and cross-account theft; none is a defence against
+  malware running as you.
+
+  The ranking is stated rather than implied, because the bottom of it is
+  materially weaker: **macOS and Windows both make an attacker ask the
+  operating system; the Linux derivation does not.** If that gap matters to
+  your threat model, prefer macOS or Windows, or do not store LinkedIn
+  credentials at all — the rest of the product works without them. The
+  reasoning is written out at `packages/domain/src/machineKey.ts:6-30` and
+  `packages/domain/src/keychain.ts:6-22`.
 - **Multi-user or multi-machine isolation.** One account, one machine. Copying a
-  data home to another machine or account leaves it undecryptable by design, on
-  both platforms — DPAPI is account-and-machine bound, and the derived key stops
-  reproducing when either the machine id or the uid changes. Reimaging a Linux
-  host changes its machine id and strands stored credentials, which is the same
-  outcome Windows has after a profile loss and has the same remedy: delete the
+  data home to another machine or account leaves it undecryptable by design on
+  all three — DPAPI is account-and-machine bound, the Keychain item does not
+  travel with the folder, and the derived key stops reproducing when either the
+  machine id or the uid changes. Reimaging a Linux host changes its machine id
+  and strands stored credentials; so does losing a Windows profile, or deleting
+  the Keychain item on a Mac. All three have the same remedy: delete the
   secrets folder and paste the token again.
 - **Network-level protection of the dashboard.** It is loopback plaintext HTTP.
   If an attacker is already executing code on the machine, the dashboard is not

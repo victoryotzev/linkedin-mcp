@@ -64,8 +64,33 @@ the tree changed; only the commits below it are absent.
   stays Windows-only is the DPAPI half of the vault, which needs real
   PowerShell, and the setup assistant, which is PowerShell — `npm run setup:mcp`
   now prints the manual configuration on other platforms instead of failing
-  with `ENOENT`. macOS remains unsupported: most of it would run, the vault has
-  no implementation, and nothing is tested.
+  with `ENOENT`.
+- **macOS support.** The third platform, and the only one besides Windows with
+  a credential store of its own. The vault seals the master key under a random
+  key held by the login Keychain, reached through `/usr/bin/security` at an
+  absolute path for the same reason the DPAPI path pins `powershell.exe`. The
+  item is created with `-T /usr/bin/security`, putting that binary on its
+  access-control list so later reads do not raise a dialog — an MCP client
+  starts this server with no terminal and nobody watching, and a vault that can
+  pop a modal is a vault that can hang the server. Every call is bounded by a
+  timeout so a dialog that does appear becomes a stated error instead.
+
+  That makes macOS the strongest of the three vaults: its key is random and
+  OS-held rather than derived from a public file. The ranking between the three
+  is now stated in SECURITY.md rather than left to be inferred.
+
+  The data home follows Apple's convention,
+  `~/Library/Application Support/linkedin-mcp`, while still honouring
+  `XDG_DATA_HOME` when it has been set deliberately.
+
+  `security` is injectable, so every one of its cases runs on any host —
+  including the ones a Mac makes hard to produce on purpose: a locked keychain,
+  an item edited by hand, a racing process that stored a different key between
+  the write and the read-back. What injection cannot prove is that `security`
+  itself behaves as assumed, which is why `macos-latest` joins the CI matrix
+  rather than being stood in for. The BSDs stay unsupported: the path rules
+  would work, the vault has no implementation there and refuses by name rather
+  than guessing.
 
 - `LICENSE` (MIT), `NOTICE`, and a generated `THIRD-PARTY-NOTICES.md`, plus an
   `npm run notices` script that regenerates the latter from `package-lock.json`.
