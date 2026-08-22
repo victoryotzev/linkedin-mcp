@@ -77,7 +77,16 @@ From the repository root:
 npm run setup:mcp
 ```
 
-**See what it would do first:**
+**On Windows** this runs the interactive assistant described below. **On Linux
+and macOS** the assistant does not apply — it is PowerShell and writes Windows
+client paths — so `npm run setup:mcp` instead prints the one JSON block you add
+to your MCP client by hand, with the right data home for your platform, and the
+rest of this section (the PowerShell commands) is Windows-only. Per-client
+examples are in [MCP server setup](linkedin-mcp-server/README.md); the short
+version is [Use the MCP without the dashboard](#use-the-mcp-without-the-dashboard)
+below, which is identical on every platform.
+
+**See what it would do first (Windows):**
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\setup-mcp.ps1 -All -NonInteractive -DryRun
@@ -131,31 +140,36 @@ Use `-DataHome "C:\absolute\path"` to choose a different shared home. The assist
 
 The dashboard and every configured MCP process open the same local application home. You can work in the dashboard, close it, continue through an AI agent, and return later without importing or reconciling anything manually.
 
+All paths below are under the data home (see [Data location](#data-location)).
+
 | Shared state | Where it lives |
 |---|---|
-| Evidence, claims, profile state, decisions, drafts, revisions, approvals, publication history, audit events, settings, and progress | `data\linkedin.sqlite3` |
-| Imported working copies and generated artifacts | `artifacts\` |
-| Encrypted LinkedIn credentials | Ciphertext in SQLite plus the sealed master key in `secrets\` — DPAPI on Windows, Keychain-sealed on macOS, machine-derived on Linux |
-| Backups | `backups\` |
+| Evidence, claims, profile state, decisions, drafts, revisions, approvals, publication history, audit events, settings, and progress | `data/linkedin.sqlite3` |
+| Imported working copies and generated artifacts | `artifacts/` |
+| Encrypted LinkedIn credentials | Ciphertext in SQLite plus the sealed master key in `secrets/` — DPAPI on Windows, Keychain-sealed on macOS, machine-derived on Linux |
+| Backups | `backups/` |
 
 SQLite WAL mode and bounded write retries allow the dashboard and MCP clients to run at the same time. The dashboard refreshes the current screen when it regains focus and periodically while visible, so agent-side changes appear without restarting it.
 
-This is local synchronization on one Windows account, not cloud or multi-machine synchronization. Secrets remain usable by both processes but are never copied into AI-client configuration, returned to a model, exported, logged, or included in backups.
+This is local synchronization on one user account, not cloud or multi-machine synchronization. Secrets remain usable by both processes but are never copied into AI-client configuration, returned to a model, exported, logged, or included in backups.
 
 ## Use the MCP without the dashboard
 
 The dashboard and MCP server are separate processes. You do **not** need to start the dashboard before connecting Codex, Claude, Copilot, Cursor, Antigravity, VS Code, or another stdio MCP host.
 
-After building, configure the client to launch:
+After building, configure the client to launch the compiled entrypoint with an
+absolute path (backslashes on Windows, `/` on Linux and macOS):
 
 ```text
-node <absolute-path-to-repo>\linkedin-mcp-server\dist\index.js
+node <absolute-path-to-repo>/linkedin-mcp-server/dist/index.js
 ```
 
-To add and import the first evidence source from a human-operated terminal:
+To add and import the first evidence source from a human-operated terminal — the
+path is an example, use your own absolute path in the shape your platform accepts:
 
-```powershell
+```text
 npm run evidence:add -- "C:\path\to\cv.pdf" document personal_doc "Current CV"
+# Linux / macOS:  npm run evidence:add -- "/home/you/cv.pdf" document personal_doc "Current CV"
 ```
 
 That command explicitly registers, enables, and imports the source without opening the dashboard. Source kinds are `repo`, `document`, `folder`, `linkedin_export`, and `manual`; trust levels are `personal_doc`, `own_repo`, and `local_clone_reference`.
@@ -208,15 +222,17 @@ Claim statements are immutable history. “Modify” creates corrected wording a
 
 ## Data location
 
-The default home is:
+The default home is each platform's own convention:
 
-```text
-%LOCALAPPDATA%\linkedin-mcp
-```
+| Platform | Default home |
+|---|---|
+| Windows | `%LOCALAPPDATA%\linkedin-mcp` |
+| macOS | `~/Library/Application Support/linkedin-mcp` (or `$XDG_DATA_HOME/linkedin-mcp` if set) |
+| Linux | `$XDG_DATA_HOME/linkedin-mcp`, otherwise `~/.local/share/linkedin-mcp` |
 
-Set `LINKEDIN_MCP_HOME` to an absolute directory to use a different home or an isolated test corpus. Relative paths are rejected because different client working directories could otherwise create separate databases. The setup assistant configures the same absolute value everywhere.
+Set `LINKEDIN_MCP_HOME` to an absolute directory to use a different home or an isolated test corpus; it overrides the default on every platform. Relative paths are rejected because different client working directories could otherwise create separate databases — and on Windows a drive-relative path like `\linkedin-data` is rejected for the same reason, since it resolves against whichever drive a process is on. The setup assistant configures the same absolute value everywhere.
 
-Do not place the live home in OneDrive, Dropbox, Google Drive, or another synchronization folder. SQLite uses a live WAL database, which should not be copied while open. Use the built-in backup command instead.
+Do not place the live home in OneDrive, Dropbox, Google Drive, iCloud Drive, or another synchronization folder. SQLite uses a live WAL database, which should not be copied while open. Use the built-in backup command instead.
 
 ## Repository map
 
@@ -266,7 +282,7 @@ For optional LinkedIn developer-app configuration, see [docs/linkedin-app-setup.
 | Document | What it covers |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Two surfaces, one engine; the seams that are not obvious |
-| [docs/compatibility.md](docs/compatibility.md) | Supported platform, runtime, MCP clients, and the known verification gap |
+| [docs/compatibility.md](docs/compatibility.md) | Supported platforms, runtime, MCP clients, and the known verification gap |
 | [docs/known-limitations.md](docs/known-limitations.md) | What this does not do, and which limits are deliberate |
 | [docs/privacy-and-local-data.md](docs/privacy-and-local-data.md) | What is stored, what leaves the machine, how to delete it |
 | [docs/threat-model.md](docs/threat-model.md) | Assets, trust boundaries, and where protection stops |
