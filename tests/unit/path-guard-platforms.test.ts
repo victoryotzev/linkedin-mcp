@@ -140,4 +140,33 @@ describe('containment', () => {
     expect(isContainedIn('/data/evidence', '/data/other/cv.pdf', 'posix')).toBe(false);
     expect(isContainedIn('/data/evidence/deep', '/data/evidence', 'posix')).toBe(false);
   });
+
+  it('does not treat a POSIX backslash as a separator', () => {
+    // A backslash is an ordinary filename character on POSIX. `/data/evi\evil`
+    // is a sibling of `/data/evi`, not a child — splitting it on backslash made
+    // its segments prefix-match the root and reported containment, which is how
+    // an import escapes its registered source root.
+    expect(isContainedIn('/data/evi', String.raw`/data/evi\evil/x`, 'posix')).toBe(false);
+    // And the inverse: a root whose own name contains a backslash still contains
+    // its real children rather than a differently-structured path.
+    expect(isContainedIn(String.raw`/srv/a\b`, String.raw`/srv/a\b/cv.pdf`, 'posix')).toBe(true);
+    expect(isContainedIn(String.raw`/srv/a\b`, '/srv/a/b/cv.pdf', 'posix')).toBe(false);
+    // On Windows the backslash IS a separator, so the same sibling shape is a
+    // real descendant there — the platforms genuinely differ.
+    expect(isContainedIn('C:\\data\\evi', 'C:\\data\\evi\\evil\\x', 'win32')).toBe(true);
+  });
+
+  it('folds only ASCII case on Windows, so an exotic codepoint cannot collapse two dirs', () => {
+    // `String.toLowerCase` folds U+212A KELVIN SIGN to 'k', but NTFS keeps
+    // `eviK` (U+212A) and `evik` as distinct directories. Folding them together
+    // would report a file in the sibling as contained in the root — a bypass of
+    // the same boundary the reparse-point defence protects. Both sides here come
+    // from realpathSync.native in practice, where only ASCII case ever differs.
+    const kelvin = '\u212A';
+    expect(isContainedIn(`C:\\data\\evi${kelvin}`, 'C:\\data\\evik\\secret.txt', 'win32')).toBe(
+      false,
+    );
+    // ASCII case still folds, which is all the real filesystem needs.
+    expect(isContainedIn('C:\\Data\\Evi', 'c:\\data\\evi\\cv.pdf', 'win32')).toBe(true);
+  });
 });

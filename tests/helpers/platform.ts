@@ -22,11 +22,12 @@
 //   tests/unit/secret-store-machine-key.test.ts
 //   tests/unit/keychain.test.ts
 //
-// What injection cannot prove is that the external commands behave as assumed —
-// that `security` really exits 44 for a missing item, that a `-T`-authorised
-// read really does not prompt. Only the macos-latest and windows-latest CI
-// lanes can show that, which is why both are in the matrix.
-//
-// tests/unit/secret-store.test.ts keeps its own probe instead of this flag: it
-// checks that DPAPI itself answers, which is stronger than checking the OS.
+// Injection cannot prove that the external commands behave as assumed — that
+// `security` really exits 44 for a missing item, that a `-T`-authorised read
+// really does not prompt — so that is proved separately, against the real
+// binaries, only where they exist: the darwin-gated block at the foot of
+// tests/unit/keychain.test.ts, and the DPAPI probe in
+// tests/unit/secret-store.test.ts (which self-gates on PowerShell answering,
+// stronger than checking the OS). Those are what the macos-latest and
+// windows-latest lanes run and no other lane can.
 export const IS_WINDOWS = process.platform === 'win32';

@@ -78,6 +78,18 @@ function normalizeAbsolute(value: string, variable: string, platform: string): s
       `${variable} must be an absolute path so every MCP client and the dashboard open the same data`,
     );
   }
+  // `isAbsolute` is not enough on Windows. It returns true for a drive-RELATIVE
+  // path — `/data/x` or `\data\x`, which have a root of `\` but no drive — and
+  // such a path resolves against whatever drive each process happens to be on.
+  // An MCP client launched from C: and the dashboard from D: would then open
+  // two different databases while both looked correctly configured, which is
+  // the exact split this rule exists to prevent. Require a real root: a drive
+  // letter, or a UNC `\\server\share`.
+  if (platform === 'win32' && !/^([A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.test(value)) {
+    throw new Error(
+      `${variable} must start with a drive letter (C:\\...) or a UNC share (\\\\server\\share\\...); a drive-relative path like ${value} resolves against whichever drive a process is on, so different clients would open different data`,
+    );
+  }
   const normalized = path.normalize(value);
   const root = path.parse(normalized).root;
   if (normalized === root) {

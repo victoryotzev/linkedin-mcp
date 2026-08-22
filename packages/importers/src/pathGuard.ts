@@ -36,6 +36,13 @@ export function hostPathPlatform(platform: string = process.platform): PathPlatf
 const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i;
 
 function rejectWindowsShape(raw: string): void {
+  // Symmetry with the POSIX rules, and belt-and-braces: `realpathSync.native`
+  // rejects an embedded NUL before it could matter, but refusing it here means
+  // the two rule sets agree on what a NUL is rather than one silently relying on
+  // a downstream call to catch it.
+  if (raw.includes('\0')) {
+    throw new DomainError('PATH_REJECTED', 'path contains an embedded NUL byte');
+  }
   if (raw.startsWith('\\\\') || raw.startsWith('//')) {
     throw new DomainError('PATH_REJECTED', `UNC/device path refused: ${raw}`);
   }
@@ -100,25 +107,41 @@ export function canonicalizePath(raw: string, platform: PathPlatform = hostPathP
  * Per-segment containment. Never a string-prefix check: C:\Evi must not contain
  * C:\EvidenceEvil.
  *
- * Case folding follows the platform rather than the host. Windows paths are
- * compared case-insensitively because the filesystem is; POSIX paths are not,
- * because on Linux `/data/Evidence` and `/data/evidence` are two directories
- * and folding them together would report containment that does not exist.
+ * Two things follow the platform rather than the host, and getting either
+ * wrong reports containment that does not exist — the way a source escapes its
+ * registered root.
  *
- * macOS sits between the two: APFS is case-insensitive by default and can be
- * formatted case-sensitive, so neither answer is right for every volume. It is
- * treated as POSIX, which errs toward refusing containment rather than
- * inventing it — the safe direction. In practice the question rarely arises,
- * because both sides of this comparison come from `realpathSync.native`, which
- * returns the casing the filesystem actually stored.
+ * The separator set. Windows splits on both `\` and `/`; POSIX splits on `/`
+ * only, because a backslash is an ordinary filename character there. Splitting
+ * POSIX paths on backslash too made `/data/evi` "contain" the sibling
+ * `/data/evi\evil`, whose segments prefix-match after the bad split.
+ *
+ * Case folding. Windows compares case-insensitively; POSIX does not, because on
+ * Linux `/data/Evidence` and `/data/evidence` are two directories. The Windows
+ * fold is ASCII-only on purpose: `String.toLowerCase` applies full-Unicode
+ * simple mappings that disagree with NTFS's own `$UpCase` table on codepoints
+ * like U+212A KELVIN SIGN and U+017F LONG S, so a directory named with one
+ * could fold-collide with a legitimate sibling and be reported contained. Both
+ * sides of this comparison come from `realpathSync.native`, which returns the
+ * casing the filesystem actually stored, so only case-only renames and the
+ * drive letter ever differ — all ASCII, all this fold needs to cover.
+ *
+ * macOS is treated as POSIX. APFS is case-insensitive by default and can be
+ * formatted case-sensitive, so neither answer is right for every volume;
+ * refusing containment rather than inventing it is the safe direction.
  */
 export function isContainedIn(
   root: string,
   candidate: string,
   platform: PathPlatform = hostPathPlatform(),
 ): boolean {
+  const separators = platform === 'win32' ? /[\\/]/ : /\//;
+  const fold = (value: string): string =>
+    platform === 'win32' ? value.replace(/[A-Z]/g, (c) => c.toLowerCase()) : value;
   const split = (value: string): string[] =>
-    (platform === 'win32' ? value.toLowerCase() : value).split(/[\\/]/).filter((s) => s.length > 0);
+    fold(value)
+      .split(separators)
+      .filter((s) => s.length > 0);
   const rootSegs = split(root);
   const candSegs = split(candidate);
   if (candSegs.length < rootSegs.length) return false;

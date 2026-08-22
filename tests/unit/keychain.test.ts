@@ -2,12 +2,13 @@ import { Buffer } from 'node:buffer';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrate, openDatabase, type Row, type SqliteDriver } from '@linkedin-mcp/db';
 import { DomainError } from '@linkedin-mcp/shared';
 import {
   KEYCHAIN_ITEM,
   readOrCreateKeychainKey,
+  runSecurity,
   type KeychainResult,
   type KeychainRunner,
 } from '../../packages/domain/src/keychain.ts';
@@ -32,10 +33,28 @@ import {
 const NOT_FOUND = 44;
 const READ_TOKEN = 'AQV-read-lane-fake-token-0123456789';
 
-/** An in-memory `security`, recording what it was asked to do. */
+/** errSecDuplicateItem, as `security` maps it: the item already exists. */
+const DUPLICATE = 45;
+
+/**
+ * An in-memory `security`, matched on selectors the way the real one is.
+ *
+ * The fake used to answer `find-generic-password` for any arguments and store
+ * on `add` for any arguments. That let a real divergence pass unseen — the
+ * binary matches on `-a`/`-s`, prints the password only for `-w`, and refuses a
+ * duplicate `add`. The fake now does the same, so a test that stops asserting
+ * those selectors is testing something the real command does not do.
+ */
 function fakeKeychain(options: { initial?: string; failOn?: string; exitCode?: number } = {}) {
   let stored: string | null = options.initial ?? null;
   const calls: string[][] = [];
+  const selector = (args: readonly string[], flag: string): string | undefined => {
+    const at = args.indexOf(flag);
+    return at >= 0 ? args[at + 1] : undefined;
+  };
+  const matches = (args: readonly string[]): boolean =>
+    selector(args, '-a') === KEYCHAIN_ITEM.account &&
+    selector(args, '-s') === KEYCHAIN_ITEM.service;
 
   const run: KeychainRunner = (args) => {
     calls.push([...args]);
@@ -44,15 +63,21 @@ function fakeKeychain(options: { initial?: string; failOn?: string; exitCode?: n
       return Promise.resolve({ code: options.exitCode ?? 1, stdout: '' } satisfies KeychainResult);
     }
     if (verb === 'find-generic-password') {
-      return Promise.resolve(
-        stored === null
-          ? ({ code: NOT_FOUND, stdout: '' } satisfies KeychainResult)
-          : ({ code: 0, stdout: `${stored}\n` } satisfies KeychainResult),
-      );
+      if (!matches(args) || stored === null) {
+        return Promise.resolve({ code: NOT_FOUND, stdout: '' } satisfies KeychainResult);
+      }
+      // The password is printed only when `-w` is passed; otherwise the real
+      // command prints the item's attributes, which this code never parses.
+      const w = args.includes('-w');
+      return Promise.resolve({ code: 0, stdout: w ? `${stored}\n` : '' } satisfies KeychainResult);
     }
     if (verb === 'add-generic-password') {
-      const at = args.indexOf('-w');
-      stored = at >= 0 ? (args[at + 1] ?? null) : null;
+      // First writer wins, the way the real command does without `-U`: a second
+      // add of the same account/service is refused as a duplicate.
+      if (stored !== null && matches(args)) {
+        return Promise.resolve({ code: DUPLICATE, stdout: '' } satisfies KeychainResult);
+      }
+      stored = selector(args, '-w') ?? null;
       return Promise.resolve({ code: 0, stdout: '' } satisfies KeychainResult);
     }
     return Promise.resolve({ code: 1, stdout: '' } satisfies KeychainResult);
@@ -87,9 +112,9 @@ describe('fetching the vault key from the Keychain', () => {
     const key = await readOrCreateKeychainKey(keychain.run);
 
     expect(key).toHaveLength(32);
-    // Read back rather than trusting the write: `-U` means a racing process may
-    // already have stored a different key, and that key is the one every row it
-    // encrypted is sealed under.
+    // Read back rather than trusting the write: a racing process may have
+    // created the item first, and its key is the one every row it encrypted is
+    // sealed under.
     expect(keychain.calls.map((c) => c[0])).toEqual([
       'find-generic-password',
       'add-generic-password',
@@ -98,36 +123,50 @@ describe('fetching the vault key from the Keychain', () => {
     expect(Buffer.from(keychain.stored ?? '', 'base64').equals(key)).toBe(true);
   });
 
-  it('yields to a key another process stored while this one was creating its own', async () => {
+  it('adopts the key a racing process created first, rather than overwriting it', async () => {
+    // The bug this replaced: with `-U`, a process that lost the master-key file
+    // race could still overwrite the Keychain key the winner had sealed that
+    // file under, stranding it. First-writer-wins means the loser's add is
+    // refused as a duplicate and it adopts the winner's key instead — so the one
+    // key in the Keychain is the one the winning file was sealed with.
     const winner = Buffer.alloc(32, 9).toString('base64');
-    const keychain = fakeKeychain();
-    const original = keychain.run;
-    const racing: KeychainRunner = async (args) => {
-      const result = await original(args);
-      // Between our add and our read-back, somebody else wins the race.
-      if (args[0] === 'add-generic-password') keychain.stored = winner;
-      return result;
-    };
+    const keychain = fakeKeychain({ initial: winner });
 
-    const key = await readOrCreateKeychainKey(racing);
+    const key = await readOrCreateKeychainKey(keychain.run);
 
     expect(key.equals(Buffer.alloc(32, 9))).toBe(true);
+    // The Keychain still holds the winner's key: this call did not overwrite it.
+    expect(keychain.stored).toBe(winner);
   });
 
-  it('puts the security binary on the item ACL, so later reads never prompt', async () => {
+  it('does not send -U, so a racing add is refused rather than clobbering', async () => {
     const keychain = fakeKeychain();
 
     await readOrCreateKeychainKey(keychain.run);
 
     const add = keychain.calls.find((c) => c[0] === 'add-generic-password') ?? [];
-    // Without -T, a read raises an authorization dialog — and an MCP-started
-    // server has no terminal and nobody watching to answer one.
+    // -T so `security` itself is on the item ACL and later reads never prompt —
+    // an MCP-started server has no terminal and nobody watching to answer one.
     expect(add).toContain('-T');
     expect(add[add.indexOf('-T') + 1]).toBe('/usr/bin/security');
-    // -U so a racing creator is updated rather than the call failing outright.
-    expect(add).toContain('-U');
+    // NOT -U: first writer wins, matching the master-key file's `wx` write.
+    expect(add).not.toContain('-U');
     expect(add).toContain(KEYCHAIN_ITEM.service);
     expect(add).toContain(KEYCHAIN_ITEM.account);
+  });
+
+  it('reads with the item selectors, and only asks for the password with -w', async () => {
+    // The fake used to answer regardless of selectors; the real command matches
+    // on -a/-s and prints the password only for -w. Asserting the argv keeps
+    // the fake honest about both.
+    const keychain = fakeKeychain({ initial: Buffer.alloc(32, 4).toString('base64') });
+
+    await readOrCreateKeychainKey(keychain.run);
+
+    const find = keychain.calls.find((c) => c[0] === 'find-generic-password') ?? [];
+    expect(find[find.indexOf('-a') + 1]).toBe(KEYCHAIN_ITEM.account);
+    expect(find[find.indexOf('-s') + 1]).toBe(KEYCHAIN_ITEM.service);
+    expect(find).toContain('-w');
   });
 
   it('reports a locked keychain as retryable rather than as corruption', async () => {
@@ -153,7 +192,7 @@ describe('fetching the vault key from the Keychain', () => {
     } catch (error) {
       const failure = error as DomainError;
       expect(failure.blockers).toContain('keychain_store_failed');
-      expect(failure.message).toMatch(/no secret was stored/i);
+      expect(failure.message).toMatch(/no secret can be stored/i);
     }
   });
 
@@ -300,5 +339,59 @@ describe('the vault on a Keychain host', () => {
 
     const store = createSecretStore(db, dir, { wrapper: keychainKeyWrapper(keychain.run) });
     await expect(store.get(SECRET_NAMES.ACCESS_TOKEN_READ)).rejects.toThrowError(DomainError);
+  });
+});
+
+// The real /usr/bin/security, only where it exists.
+//
+// Everything above injects a fake, which can prove this module's logic but not
+// the assumptions it rests on: that `security` exits 44 for a missing item, and
+// that an item created with `-T /usr/bin/security` reads back without an
+// authorization dialog. The docs claim the macos-latest lane proves exactly
+// that, and until this block nothing did. On a non-interactive CI runner a
+// prompt would hang and the module's 15s timeout would surface as a failure, so
+// a round-trip completing here IS the proof that it did not prompt.
+//
+// A throwaway service name keeps this out of the real vault's item, and afterAll
+// deletes it so the runner's keychain is left as it was found.
+describe.skipIf(process.platform !== 'darwin')('the real security binary', () => {
+  const service = `linkedin-mcp-test-${process.pid}`;
+  const account = 'kek-probe';
+
+  afterAll(async () => {
+    await runSecurity(['delete-generic-password', '-a', account, '-s', service]).catch(() => {});
+  });
+
+  it('exits 44 for an item that is not there', async () => {
+    const result = await runSecurity([
+      'find-generic-password',
+      '-a',
+      account,
+      '-s',
+      `${service}-absent`,
+      '-w',
+    ]);
+    expect(result.code).toBe(44);
+  });
+
+  it('round-trips a -T-authorised item without prompting', async () => {
+    const secret = Buffer.alloc(32, 0x5a).toString('base64');
+    const add = await runSecurity([
+      'add-generic-password',
+      '-a',
+      account,
+      '-s',
+      service,
+      '-T',
+      '/usr/bin/security',
+      '-U',
+      '-w',
+      secret,
+    ]);
+    expect(add.code).toBe(0);
+
+    const found = await runSecurity(['find-generic-password', '-a', account, '-s', service, '-w']);
+    expect(found.code).toBe(0);
+    expect(found.stdout.trim()).toBe(secret);
   });
 });

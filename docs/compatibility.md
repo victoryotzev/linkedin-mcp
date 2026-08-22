@@ -15,7 +15,7 @@ rather than worked around.
 
 1. **Evidence import accepts each platform's own absolute-path shape.**
    `canonicalizePath` applies one of two rule sets
-   (`packages/importers/src/pathGuard.ts:79-96`). Windows requires `X:\...` and
+   (`packages/importers/src/pathGuard.ts:84-90`). Windows requires `X:\...` and
    additionally refuses UNC paths, device prefixes, alternate data streams and
    reserved device names. Linux requires a `/` root and refuses embedded NUL
    bytes and the ambiguous `//` root. Containment comparison is
@@ -131,16 +131,17 @@ The server speaks stdio only. There is no HTTP or SSE transport.
 ## Known verification gap
 
 The clean-room evidence behind the "supported" claims above comes from the CI
-runners — `windows-latest` and `ubuntu-latest`, each building from a fresh
-checkout and booting the server against a data home that does not exist yet —
-and from a local temp-directory clone with an isolated `LINKEDIN_MCP_HOME`.
+runners — `windows-latest`, `ubuntu-latest` and `macos-latest`, each building
+from a fresh checkout and booting the server against a data home that does not
+exist yet — and from a local temp-directory clone with an isolated
+`LINKEDIN_MCP_HOME`.
 
 **None of that can prove that a prerequisite already installed on the runner
-image is not masking a missing dependency**, and the Linux claim carries one
-gap of its own: no DPAPI-equivalent hardware or distribution variety is
-covered, and `/etc/machine-id` is present on the runner, so the
-machine-id-absent path is proved by injection rather than by a host that
-genuinely lacks one. If you hit a missing prerequisite on
-a clean machine, that is a real bug worth reporting — the gap is documented here
-rather than glossed over, and re-testing on a fresh machine is the first thing
-to do if one becomes available.
+image is not masking a missing dependency**, and two vault paths are proved by
+injection rather than by a host that genuinely lacks the resource: `security`
+and DPAPI are exercised for real on the macOS and Windows runners, but the
+machine-id-absent branch is not (the Linux runner has `/etc/machine-id`), and no
+DPAPI-equivalent hardware or distribution variety is covered. If you hit a
+missing prerequisite on a clean machine, that is a real bug worth reporting —
+the gap is documented here rather than glossed over, and re-testing on a fresh
+machine is the first thing to do if one becomes available.

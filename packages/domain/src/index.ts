@@ -123,6 +123,7 @@ export {
 export {
   KEYCHAIN_ITEM,
   readOrCreateKeychainKey,
+  runSecurity,
   type KeychainResult,
   type KeychainRunner,
 } from './keychain.ts';

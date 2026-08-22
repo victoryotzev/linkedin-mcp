@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { withWriteTx, type ArtifactStore, type SqliteDriver } from '@linkedin-mcp/db';
 import {
@@ -305,11 +305,14 @@ async function collectCandidates(
   switch (source.kind) {
     case 'document': {
       assertUnderSizeCap(source.root_path, maxFileBytes);
-      // Split on either separator. Splitting on backslash alone left the whole
-      // absolute path as the artifact's name on Linux — stored, indexed and
-      // shown wherever a file name belongs, and in breach of this file's own
-      // rule a few lines up that a relpath may not contain a separator.
-      const name = source.root_path.split(/[\\/]/).pop() || 'document';
+      // The file name is the last segment, by this host's separator rules.
+      // `node:path`'s basename is that rule: on Windows both `\` and `/` end a
+      // segment, on POSIX only `/` — so a Linux file legitimately named
+      // `Q1\report.pdf` keeps its name rather than losing everything before the
+      // backslash. An earlier splitting-on-backslash-everywhere version stored
+      // the whole absolute path here on Linux; splitting on both separators
+      // everywhere fixed that but mangled backslash-bearing POSIX names.
+      const name = basename(source.root_path) || 'document';
       return [
         {
           relpath: name,

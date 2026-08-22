@@ -76,10 +76,13 @@ function citations(): Citation[] {
 // Read once: every case below asks a different question of the same set.
 const ALL = citations();
 
-/** A line that carries no claim — blank, or pure punctuation closing a block. */
+/** A line that carries no claim — blank, or nothing but structural punctuation. */
 function isEmptyOfMeaning(line: string): boolean {
   const trimmed = line.trim();
-  return trimmed === '' || /^[})\];,]+$/.test(trimmed);
+  // Opening braces as well as closing ones: a citation landing on a bare `{`
+  // or `[` has drifted onto the top of a block rather than the claim inside it,
+  // and is exactly as misleading as one that landed on the `}` at the bottom.
+  return trimmed === '' || /^[{}()[\];,]+$/.test(trimmed);
 }
 
 describe('the file:line citations in the documentation', () => {

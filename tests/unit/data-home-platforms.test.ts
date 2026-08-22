@@ -63,6 +63,28 @@ describe('the Windows default', () => {
       resolveDataHome({ XDG_DATA_HOME: '/home/alex/.local/share' }, 'win32'),
     ).toThrowError(/LOCALAPPDATA/i);
   });
+
+  it('refuses a drive-relative home that would split state by working drive', () => {
+    // `win32.isAbsolute('/x')` and `isAbsolute('\\x')` are both true, but neither
+    // names a drive, so each process resolves it against whatever drive it is on
+    // — a client on C: and the dashboard on D: would open different databases.
+    // That is the exact divergence the absolute-path rule exists to prevent, so
+    // the rooted-but-driveless forms are refused, not accepted.
+    for (const value of ['/data/linkedin', '\\data\\linkedin', '/', '\\']) {
+      expect(() => resolveDataHome({ LINKEDIN_MCP_HOME: value }, 'win32')).toThrowError(
+        /drive letter|filesystem root/i,
+      );
+    }
+  });
+
+  it('accepts a real drive-letter path and a UNC share', () => {
+    expect(resolveDataHome({ LINKEDIN_MCP_HOME: 'D:\\linkedin' }, 'win32')).toBe('D:\\linkedin');
+    // A UNC share names one location for every process, so it satisfies the rule
+    // even though a network data home is unusual.
+    expect(resolveDataHome({ LINKEDIN_MCP_HOME: '\\\\srv\\share\\linkedin' }, 'win32')).toBe(
+      '\\\\srv\\share\\linkedin',
+    );
+  });
 });
 
 describe('the Linux default', () => {

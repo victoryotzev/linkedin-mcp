@@ -39,7 +39,12 @@ export interface KeychainResult {
 /** Injected by tests so every branch here is reachable without a Mac. */
 export type KeychainRunner = (args: readonly string[]) => Promise<KeychainResult>;
 
-function runSecurity(args: readonly string[]): Promise<KeychainResult> {
+/**
+ * The real `security` runner. Exported so a macOS-gated test can drive the
+ * actual binary and prove the exit codes this module assumes — the injected
+ * fake can never establish that.
+ */
+export function runSecurity(args: readonly string[]): Promise<KeychainResult> {
   return new Promise<KeychainResult>((resolve, reject) => {
     const child = spawn(SECURITY_BIN, [...args]);
     const chunks: Buffer[] = [];
@@ -55,7 +60,20 @@ function runSecurity(args: readonly string[]): Promise<KeychainResult> {
     child.stderr?.resume();
     child.once('error', (err) => {
       clearTimeout(timer);
-      reject(err);
+      // Wrap the raw spawn failure so a missing or blocked `security` — a
+      // hardened environment, or `platform: 'darwin'` forced on a host that is
+      // not a Mac — reaches the member as a stated condition with a remedy
+      // rather than `spawn /usr/bin/security ENOENT`.
+      const code = (err as NodeJS.ErrnoException).code;
+      reject(
+        new DomainError(
+          'INTERNAL',
+          code === 'ENOENT'
+            ? `${SECURITY_BIN} was not found; the macOS credential vault needs it. Secret storage is unavailable on this host, and the rest of the product works without it.`
+            : `${SECURITY_BIN} could not be started for the credential vault (${String(code)})`,
+          { blockers: ['keychain_unavailable'] },
+        ),
+      );
     });
     child.once('close', (code) => {
       clearTimeout(timer);
@@ -90,6 +108,13 @@ export async function readOrCreateKeychainKey(run: KeychainRunner = runSecurity)
   if (found !== null) return found;
 
   const created = randomBytes(KEK_BYTES).toString('base64');
+  // No `-U`. First writer of the Keychain item wins, to match the `wx` write of
+  // the master-key file it will be sealed under. `-U` did the opposite: a
+  // process that lost the file race could still overwrite the Keychain key the
+  // winner had already sealed its master-key file with, leaving that file
+  // openable by nobody. Without `-U`, a racing creator fails with
+  // errSecDuplicateItem and reads the winner's key back instead — so every
+  // process converges on the one key the winning file was sealed under.
   const add = await run([
     'add-generic-password',
     '-a',
@@ -103,31 +128,26 @@ export async function readOrCreateKeychainKey(run: KeychainRunner = runSecurity)
     // Puts `security` itself on the item's ACL, so reads never prompt.
     '-T',
     SECURITY_BIN,
-    // Update in place rather than failing if a racing process got there first.
-    '-U',
     '-w',
     created,
   ]);
-  if (add.code !== 0) {
-    throw new DomainError(
-      'INTERNAL',
-      `the Keychain refused to store the vault key (security exited ${String(add.code)}), so no secret was stored. Check that the login keychain is unlocked.`,
-      { blockers: ['keychain_store_failed'] },
-    );
-  }
 
-  // Read back rather than trusting what we just wrote: `-U` means a racing
-  // process may have written a different key a moment earlier, and its key is
-  // the one every row it encrypted is sealed under.
+  // Read back regardless of the add's exit code. A `0` means we created the
+  // item and read our own key; a duplicate-item failure means a racing process
+  // created it first, and its key — not ours — is the authoritative one. Either
+  // way `lookup` returns the key the item actually holds. Only when the add
+  // failed AND nothing is there to adopt (a locked keychain surfaces from
+  // `lookup` itself as a retryable error before this point) is the vault
+  // genuinely unusable.
   const winner = await lookup(run);
-  if (winner === null) {
-    throw new DomainError(
-      'INTERNAL',
-      'the Keychain accepted the vault key and then did not return it, so the vault cannot be trusted on this host',
-      { blockers: ['keychain_readback_failed'] },
-    );
-  }
-  return winner;
+  if (winner !== null) return winner;
+  throw new DomainError(
+    'INTERNAL',
+    add.code === 0
+      ? 'the Keychain accepted the vault key and then did not return it, so the vault cannot be trusted on this host'
+      : `the Keychain refused to store the vault key (security exited ${String(add.code)}) and holds no existing one, so no secret can be stored. Check that the login keychain is unlocked.`,
+    { blockers: [add.code === 0 ? 'keychain_readback_failed' : 'keychain_store_failed'] },
+  );
 }
 
 async function lookup(run: KeychainRunner): Promise<Buffer | null> {

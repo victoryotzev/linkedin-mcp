@@ -1,5 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { manualSetupNote, planSetup } from '../../scripts/setup-mcp.mjs';
+import { IS_WINDOWS } from '../helpers/platform.ts';
+
+const scriptPath = fileURLToPath(new URL('../../scripts/setup-mcp.mjs', import.meta.url));
 
 // What `npm run setup:mcp` does on a platform its assistant was never written
 // for.
@@ -63,5 +68,27 @@ describe('what it tells someone who cannot run the assistant', () => {
 
   it('points at the per-client examples for anyone who wants one', () => {
     expect(MANUAL_SETUP_NOTE).toContain('linkedin-mcp-server/README.md');
+  });
+});
+
+// Running the dispatcher for real, off Windows.
+//
+// planSetup and manualSetupNote are pure and covered above, but main() — the
+// direct-run guard, the console.error, the exit code — was asserted only by
+// hand. The docs promise `npm run setup:mcp` prints the manual block instead of
+// failing with ENOENT here, so a test spawns the actual script and checks it.
+// Gated off Windows, where main() would instead shell out to PowerShell.
+describe.skipIf(IS_WINDOWS)('running scripts/setup-mcp.mjs directly', () => {
+  it('exits non-zero and prints the manual configuration block', () => {
+    const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8' });
+
+    // Non-zero: it was asked to configure something and, correctly, did not.
+    expect(result.status).toBe(1);
+    // The whole of manual setup is on stderr, not a bare ENOENT.
+    expect(result.stderr).toContain('Windows-only');
+    expect(result.stderr).toContain('"command"');
+    expect(result.stderr).toContain('LINKEDIN_MCP_HOME');
+    expect(result.stderr).toContain('linkedin-mcp-server/dist/index.js');
+    expect(result.stdout).not.toMatch(/powershell/i);
   });
 });

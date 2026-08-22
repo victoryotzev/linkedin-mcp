@@ -467,7 +467,7 @@ export function createSecretStore(
       if (rowKeyId !== keyId) {
         throw new DomainError(
           'INTEGRITY_ERROR',
-          `secret '${name}' was encrypted under master key ${rowKeyId} but this home now holds ${keyId}. DPAPI material is bound to this Windows user and machine, so a database and a secrets folder from different origins cannot be mixed. Re-paste the value in the dashboard (Capabilities area).`,
+          `secret '${name}' was encrypted under master key ${rowKeyId} but this home now holds ${keyId}. The master key is bound to this account and machine, so a database and a secrets folder from different origins cannot be mixed. Re-paste the value in the dashboard (Capabilities area).`,
           { blockers: ['master_key_mismatch'] },
         );
       }
