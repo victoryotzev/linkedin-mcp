@@ -39,5 +39,16 @@ function normalizeAbsolute(value: string, variable: string): string {
       `${variable} cannot be a filesystem root; choose a dedicated application folder`,
     );
   }
-  return normalized.replace(/[\\/]+$/, '');
+  // Trailing separators come off by scanning back, not by `/[\\/]+$/`. That
+  // regex is quadratic on a long run of separators that is not at the end —
+  // the engine retries the whole run from each position — and this value comes
+  // from an environment variable or a `-DataHome` argument, so its length is
+  // not this function's to assume. The loop is linear and does the same thing.
+  let end = normalized.length;
+  while (end > 0) {
+    const character = normalized[end - 1];
+    if (character !== '\\' && character !== '/') break;
+    end -= 1;
+  }
+  return normalized.slice(0, end);
 }
