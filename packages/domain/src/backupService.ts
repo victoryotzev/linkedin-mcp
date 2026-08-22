@@ -119,9 +119,32 @@ export async function runBackup(
   ];
 
   const artifactsRoot = join(home, 'artifacts');
+  // walk() returns canonical paths, so the root they are measured against has
+  // to be canonical too. A home that is not its own canonical path is ordinary
+  // on Windows — an 8.3 alias like PROGRA~1, a long account name, any folder
+  // with a space in it, a junction — and measuring canonical files against the
+  // uncanonical root made `relative` climb out of the tree and back down it.
+  // Every artifact then took a '..' entry: copied to a directory beside the
+  // backup rather than inside it, absent from the archive that claimed to hold
+  // it, and refused by verifyBackup as an unsafe path. A backup that cannot
+  // verify is also one that never unlocks the full purge.
+  const canonicalArtifacts = existsSync(artifactsRoot)
+    ? realpathSync.native(artifactsRoot)
+    : artifactsRoot;
   for (const file of walk(artifactsRoot)) {
-    const rel = join('artifacts', relative(artifactsRoot, file)).replaceAll('\\', '/');
+    const rel = join('artifacts', relative(canonicalArtifacts, file)).replaceAll('\\', '/');
     const dest = join(directory, rel);
+    // Unreachable once the root above is canonical: walk only returns files it
+    // has already proved are inside it, so `relative` cannot produce a '..'.
+    // The check stays because it is the thing that makes that true, and because
+    // the alternative to failing here is writing a member's evidence somewhere
+    // nobody will look for it.
+    /* v8 ignore next 5 */
+    if (!isContained(directory, dest)) {
+      throw new DomainError('PATH_REJECTED', 'artifact path escaped the backup directory', {
+        blockers: ['unsafe_artifact_path'],
+      });
+    }
     mkdirSync(join(dest, '..'), { recursive: true });
     copyFileSync(file, dest);
     entries.push({ path: rel, bytes: statSync(dest).size, sha256: hashFile(dest) });

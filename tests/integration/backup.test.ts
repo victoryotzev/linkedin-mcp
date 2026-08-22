@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  rmdirSync,
   statSync,
   symlinkSync,
   writeFileSync,
@@ -66,6 +67,43 @@ describe('backup and restore', () => {
     expect(verification.valid).toBe(true);
     expect(verification.problems).toEqual([]);
     expect(existsSync(join(result.directory, 'linkedin.sqlite3'))).toBe(true);
+  });
+
+  it('keeps artifacts inside the backup when the home is not its own canonical path', async () => {
+    // A data home whose path is not its canonical path is ordinary on Windows:
+    // an 8.3 alias (PROGRA~1, a long account name, any folder with a space) or
+    // a junction. GitHub's own runners hand out a short-name temp directory.
+    //
+    // walk() returns canonical paths. Measuring them against a root that was
+    // not canonical made `relative` climb out of the tree and back down it, so
+    // every artifact entry became a '..' path: absent from the backup, written
+    // beside it instead, and then refused by verifyBackup as unsafe. A backup
+    // that cannot verify is also one that never unlocks the full purge.
+    const linked = join(tmpdir(), `linkedin-mcp-linkhome-${process.pid}`);
+    symlinkSync(home, linked, 'junction');
+    try {
+      const result = await runBackup(db, linked, { label: 'linked' });
+      const manifest = JSON.parse(
+        readFileSync(join(result.directory, 'backup-manifest.json'), 'utf8'),
+      ) as { entries: Array<{ path: string }> };
+      const paths = manifest.entries.map((e) => e.path);
+
+      expect(paths.some((p) => p.startsWith('artifacts/'))).toBe(true);
+      expect(paths.some((p) => p.split('/').includes('..'))).toBe(false);
+
+      // Every entry names a file that is really inside the backup directory.
+      for (const p of paths) {
+        expect(existsSync(join(result.directory, ...p.split('/')))).toBe(true);
+      }
+
+      const verification = verifyBackup(result.directory);
+      expect(verification.problems).toEqual([]);
+      expect(verification.valid).toBe(true);
+    } finally {
+      // rmdir removes the reparse point; the target is `home` and is cleaned
+      // by afterEach. Never recursive here — that would delete the real tree.
+      rmdirSync(linked);
+    }
   });
 
   it('rejects traversal and reserved backup labels before creating a directory', async () => {
