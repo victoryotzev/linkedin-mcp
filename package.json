@@ -43,14 +43,14 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
-    "@biomejs/biome": "2.5.10",
+    "@biomejs/biome": "2.5.11",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.11",
     "axe-core": "^4.13.0",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "^20.12.0",
     "tsup": "^8.0.0",
-    "tsx": "^4.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
