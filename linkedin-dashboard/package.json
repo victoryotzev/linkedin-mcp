@@ -24,6 +24,6 @@
     "@linkedin-mcp/domain": "*",
     "@linkedin-mcp/server": "*",
     "@linkedin-mcp/shared": "*",
-    "hono": "^4.7.0"
+    "hono": "^4.13.5"
   }
 }
