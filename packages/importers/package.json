@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@linkedin-mcp/shared": "*",
-    "pdfjs-dist": "^6.2.108",
+    "pdfjs-dist": "^6.4.299",
     "yauzl": "^3.2.0"
   },
   "devDependencies": {
