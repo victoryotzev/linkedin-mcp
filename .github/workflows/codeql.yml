@@ -33,6 +33,6 @@ jobs:
       # No build step: this is a TypeScript project and CodeQL analyses the
       # sources directly. The runner is Linux because CodeQL only needs to read
       # the code, not run it — the product itself is Windows-only.
-      - uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
         with:
           category: /language:javascript-typescript
