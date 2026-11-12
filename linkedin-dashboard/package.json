@@ -19,7 +19,7 @@
     "dev": "node ../scripts/dev-dashboard.mjs"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.0",
+    "@hono/node-server": "^2.1.6",
     "@linkedin-mcp/db": "*",
     "@linkedin-mcp/domain": "*",
     "@linkedin-mcp/server": "*",
